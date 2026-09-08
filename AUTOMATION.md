@@ -1,5 +1,7 @@
 # Automated central setup
 
+See [PARAMETERS.md](PARAMETERS.md) for the full value/reference table and [AGENT_HANDOVER.md](AGENT_HANDOVER.md) for current context and verification limits.
+
 The distribution skill coordinates intake, host setup and verification. Helpers configure jobs without installing anything in an app.
 
 Copy [automation/answers.example.json](automation/answers.example.json) to a protected setup directory outside both repositories. Ask the user for actual central/app Git URLs, branches, Jenkins host and each applicable job value. Replace examples and record confirmation.

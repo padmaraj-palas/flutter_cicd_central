@@ -1,5 +1,7 @@
 # Create a central Flutter job
 
+See [PARAMETERS.md](PARAMETERS.md) for the full value/reference table and [AGENT_HANDOVER.md](AGENT_HANDOVER.md) for current context and verification limits.
+
 ## Publish central tooling
 
 Create an empty Git repository on GitHub, GitLab or another reachable Git host. Copy the **contents of this central repository folder** to its root, including hidden files, and publish a reviewed version. The root contains Jenkinsfile, scripts/, automation/, host/, Gemfile and guides. Pin jobs to an approved tag or commit.

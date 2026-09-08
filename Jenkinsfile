@@ -26,7 +26,8 @@ def linuxRun(String action, String platform = '') {
         sh '''
             set -eu
             set -- "$CI_ACTION" --project "$WORKSPACE/app"
-            if [ -n "$CI_PLATFORM" ]; then set -- "$@" --platform "$CI_PLATFORM"; fi
+            # Jenkins withEnv unsets variables assigned an empty value.
+            if [ -n "${CI_PLATFORM:-}" ]; then set -- "$@" --platform "$CI_PLATFORM"; fi
             docker run --rm --volumes-from jenkins \
               -v flutter-pub-cache:/root/.pub-cache -v gradle-cache:/root/.gradle \
               -v flutter-ndk-cache:/opt/android-sdk/ndk \

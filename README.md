@@ -1,6 +1,6 @@
 # Central Flutter CI
 
-Publish this folder as a separate Git repository. Copy **nothing** into Flutter repositories.
+This is the standalone central CI repository. Copy **nothing** into Flutter repositories.
 
 Each Jenkins job selects an app repository and branch, environment, build mode, platform, app name, API URL, Android application ID and iOS bundle ID. The pipeline checks out central tooling and the app separately. Only the disposable app checkout is adapted for a build; no changes are committed or pushed to the app.
 
@@ -9,6 +9,12 @@ Start with [HOST_SETUP.md](HOST_SETUP.md), then [JENKINS_SETUP.md](JENKINS_SETUP
 The original [Flutter CI-CD.pdf](requirements/Flutter%20CI-CD.pdf) and [derived handover](requirements/FLUTTER_CICD_AGENT_HANDOVER.md) are included unchanged. They provide requirements/history; the current zero-app-files request governs this implementation.
 
 This implementation tests, builds and archives Android APK/AAB, Web output and iOS simulator ZIP/IPA. It does not upload to stores or deploy websites.
+
+## Continuing work or configuring a job
+
+New agents: read [AGENTS.md](AGENTS.md), then [AGENT_HANDOVER.md](AGENT_HANDOVER.md) for the design, code map, history and pending verification.
+
+Job configuration: [PARAMETERS.md](PARAMETERS.md) lists every parameter, possible values, examples and signing requirements. Keep it alongside [JENKINS_SETUP.md](JENKINS_SETUP.md) when creating or copying jobs.
 
 ## Application compatibility
 
