@@ -28,7 +28,18 @@ def linuxRun(String action, String platform = '') {
             set -- "$CI_ACTION" --project "$WORKSPACE/app"
             # Jenkins withEnv unsets variables assigned an empty value.
             if [ -n "${CI_PLATFORM:-}" ]; then set -- "$@" --platform "$CI_PLATFORM"; fi
-            docker run --rm -v "$WORKSPACE:$WORKSPACE" \
+            # Controller topology differs between hosts. A containerised Jenkins
+            # shares its volumes so the build container sees the same workspace;
+            # a controller running on the host bind-mounts the workspace instead,
+            # because -v resolves its source on the Docker host, not in a container.
+            ci_docker_run() {
+                if docker container inspect jenkins >/dev/null 2>&1; then
+                    docker run --rm --volumes-from jenkins "$@"
+                else
+                    docker run --rm -v "$WORKSPACE:$WORKSPACE" "$@"
+                fi
+            }
+            ci_docker_run \
               -v flutter-pub-cache:/root/.pub-cache -v gradle-cache:/root/.gradle \
               -v flutter-ndk-cache:/opt/android-sdk/ndk \
               -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE \
@@ -70,7 +81,18 @@ def linuxUploadRun(String action, String platform = '') {
             if [ -n "${CI_PLATFORM:-}" ]; then
                 set -- "$@" --project "$WORKSPACE/app" --platform "$CI_PLATFORM"
             fi
-            docker run --rm -v "$WORKSPACE:$WORKSPACE" \
+            # Controller topology differs between hosts. A containerised Jenkins
+            # shares its volumes so the build container sees the same workspace;
+            # a controller running on the host bind-mounts the workspace instead,
+            # because -v resolves its source on the Docker host, not in a container.
+            ci_docker_run() {
+                if docker container inspect jenkins >/dev/null 2>&1; then
+                    docker run --rm --volumes-from jenkins "$@"
+                else
+                    docker run --rm -v "$WORKSPACE:$WORKSPACE" "$@"
+                fi
+            }
+            ci_docker_run \
               -v flutter-upload-gems:/opt/upload-gems \
               -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
               -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE -e PLATFORM \
@@ -93,7 +115,18 @@ def uploadArtifact(String platform) {
     if (platform == 'android' && destination == 'google') {
         sh '''
             set -eu
-            docker run --rm -v "$WORKSPACE:$WORKSPACE" \
+            # Controller topology differs between hosts. A containerised Jenkins
+            # shares its volumes so the build container sees the same workspace;
+            # a controller running on the host bind-mounts the workspace instead,
+            # because -v resolves its source on the Docker host, not in a container.
+            ci_docker_run() {
+                if docker container inspect jenkins >/dev/null 2>&1; then
+                    docker run --rm --volumes-from jenkins "$@"
+                else
+                    docker run --rm -v "$WORKSPACE:$WORKSPACE" "$@"
+                fi
+            }
+            ci_docker_run \
               -v flutter-upload-gems:/opt/upload-gems \
               -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
               -w "$CI_ROOT/upload" "$FLUTTER_IMAGE" sh -c 'bundle check || bundle install'
