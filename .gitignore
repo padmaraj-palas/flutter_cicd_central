@@ -1,0 +1,6 @@
+host/.env
+__pycache__/
+*.pyc
+.bundle/
+vendor/bundle/
+.setup-state/

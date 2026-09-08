@@ -1,0 +1,51 @@
+// Applied only in Jenkins's disposable app checkout; app namespaces/source packages stay intact.
+// Requires Android Gradle Plugin 7.0+ and its public variant API.
+def selectedId = System.getenv('ANDROID_APPLICATION_ID') ?: ''
+def selectedFlavor = System.getenv('ANDROID_FLAVOR') ?: ''
+if (!(selectedId ==~ /[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+/)) {
+    throw new GradleException('ANDROID_APPLICATION_ID must be a valid reverse-domain application ID.')
+}
+def components = project.extensions.findByName('androidComponents')
+if (components == null || !project.plugins.hasPlugin('com.android.application')) {
+    throw new GradleException('Central Flutter CI requires an Android application module with AGP 7.0+.')
+}
+components.finalizeDsl { androidDsl ->
+    if (androidDsl.flavorDimensions.size() > 1) {
+        throw new GradleException('Multiple Android flavor dimensions require a reviewed central adapter.')
+    }
+    def flavors = androidDsl.productFlavors.collect { it.name }
+    if ((!flavors.isEmpty() && !flavors.contains(selectedFlavor)) || (flavors.isEmpty() && selectedFlavor)) {
+        throw new GradleException('ANDROID_FLAVOR must select an existing flavor, or be empty for an unflavored app.')
+    }
+    androidDsl.defaultConfig.applicationId = selectedId
+    androidDsl.defaultConfig.applicationIdSuffix = ''
+    androidDsl.productFlavors.each {
+        it.applicationId = selectedId
+        it.applicationIdSuffix = ''
+    }
+    androidDsl.buildTypes.each { it.applicationIdSuffix = '' }
+    if (System.getenv('BUILD_MODE') == 'release') {
+        def signingMode = System.getenv('ANDROID_RELEASE_SIGNING') ?: ''
+        if (!(signingMode in ['jenkins', 'project'])) {
+            throw new GradleException('ANDROID_RELEASE_SIGNING must be jenkins or project for release builds.')
+        }
+        if (signingMode == 'jenkins') {
+            def keyFile = System.getenv('ANDROID_KEYSTORE_FILE')
+            def storePasswordValue = System.getenv('ANDROID_STORE_PASSWORD')
+            def keyAliasValue = System.getenv('ANDROID_KEY_ALIAS')
+            def keyPasswordValue = System.getenv('ANDROID_KEY_PASSWORD')
+            if (!keyFile || !storePasswordValue || !keyAliasValue || !keyPasswordValue || !new File(keyFile).isFile()) {
+                throw new GradleException('Android release signing requires all four Jenkins credential bindings.')
+            }
+            if (androidDsl.signingConfigs.findByName('centralCI') != null) {
+                throw new GradleException('The app already defines centralCI signing; choose another adapter signing name.')
+            }
+            def centralSigning = androidDsl.signingConfigs.create('centralCI')
+            centralSigning.storeFile = new File(keyFile)
+            centralSigning.storePassword = storePasswordValue
+            centralSigning.keyAlias = keyAliasValue
+            centralSigning.keyPassword = keyPasswordValue
+            androidDsl.buildTypes.getByName('release').signingConfig = centralSigning
+        }
+    }
+}

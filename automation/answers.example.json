@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "confirmed": false,
+  "project_id": "yourapp",
+  "job_name": "YourApp-Staging-Android",
+  "jenkins": {
+    "url": "http://localhost:8080",
+    "poll_schedule": "H/5 * * * *"
+  },
+  "ci": {
+    "repository_url": "https://github.com/your-org/flutter-cicd-central.git",
+    "ref": "refs/tags/v1.0.0",
+    "script_path": "Jenkinsfile",
+    "credentials_id": ""
+  },
+  "parameters": {
+    "APP_REPOSITORY_URL": "https://github.com/your-org/your-flutter-app.git",
+    "APP_BRANCH": "staging",
+    "APP_CREDENTIALS_ID": "",
+    "ENVIRONMENT": "staging",
+    "BUILD_MODE": "debug",
+    "PLATFORM": "android",
+    "APP_NAME": "Your App Staging",
+    "API_BASE_URL": "https://staging-api.example.com",
+    "ANDROID_APPLICATION_ID": "com.example.yourapp.staging",
+    "IOS_BUNDLE_ID": "com.example.yourapp.staging",
+    "ANDROID_FLAVOR": "",
+    "IOS_SCHEME": "",
+    "LINUX_AGENT_LABEL": "built-in",
+    "MACOS_AGENT_LABEL": "flutter-macos",
+    "FLUTTER_IMAGE": "flutter-ci:1.0",
+    "IOS_RELEASE_SIGNING": "existing-keychain",
+    "IOS_TEAM_ID": "",
+    "IOS_EXPORT_METHOD": "release-testing",
+    "IOS_SIGNING_STYLE": "manual",
+    "IOS_PROFILE_NAME": "",
+    "IOS_CODE_SIGN_IDENTITY": "Apple Distribution",
+    "IOS_P12_CREDENTIAL_ID": "",
+    "IOS_PASSWORD_CREDENTIAL_ID": "",
+    "IOS_PROFILE_CREDENTIAL_ID": "",
+    "ANDROID_RELEASE_SIGNING": "project",
+    "ANDROID_KEYSTORE_CREDENTIAL_ID": "",
+    "ANDROID_STORE_PASSWORD_CREDENTIAL_ID": "",
+    "ANDROID_KEY_ALIAS_CREDENTIAL_ID": "",
+    "ANDROID_KEY_PASSWORD_CREDENTIAL_ID": ""
+  }
+}
