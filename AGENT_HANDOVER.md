@@ -19,13 +19,14 @@ Development started in D:/Projects/GIT/ci_cd_test. That Flutter test project and
 5. Automatic app-branch triggering must work. Poll SCM is implemented; provider webhooks require actual provider/Jenkins configuration. The first app checkout establishes polling.
 6. Web/Android run on Linux Docker; iOS uses a native Mac/Xcode worker. all means all three platforms and therefore needs a Mac.
 7. Setup automation asks for the intended Flutter repository/branch, central repository/version, host and public job settings. It completes accessible setup work and resumes verification after any unavoidable credential entry.
-8. Preserve original requirements unchanged and reference them. Firebase/example feature-flag fields were deliberately removed and must not reappear as baseline settings.
-9. Current implementation builds and archives. Store uploads, website deployment and broader original-platform requirements are not implemented.
+8. Preserve original requirements unchanged and reference them. The user explicitly added per-job upload configuration on 2026-09-08, superseding the earlier exclusion of Firebase distribution settings. Unrelated example feature flags remain excluded.
+9. The user explicitly requested automatic uploads on 2026-09-08: Android none/firebase/google, iOS none/firebase/appstore, Web none for now. Defaults remain none for existing jobs. Uploads follow successful artifact archival and use Jenkins Secret file credentials; appstore means App Store Connect/TestFlight binary upload without App Review/public release. Website deployment and broader historical requirements remain outside current scope.
 
 ## Reading order
 
 - [PARAMETERS.md](PARAMETERS.md): complete parameter contract, possible values and conditional signing requirements.
 - [JENKINS_SETUP.md](JENKINS_SETUP.md): manual job creation, central/app SCM distinction and triggers.
+- [UPLOADS.md](UPLOADS.md): optional upload destinations, credentials, service preparation and migration.
 - [AUTOMATION.md](AUTOMATION.md): helper commands and existing/fresh controller paths.
 - [HOST_SETUP.md](HOST_SETUP.md) and [IOS_SETUP.md](IOS_SETUP.md): infrastructure.
 - [VALIDATION.md](VALIDATION.md): actual evidence and pending work.
@@ -36,6 +37,8 @@ Development started in D:/Projects/GIT/ci_cd_test. That Flutter test project and
 | File / directory | Responsibility |
 | --- | --- |
 | Jenkinsfile | Job-value validation, separate checkouts, node routing, credential bindings and archive checks |
+| scripts/upload_settings.py | Shared optional upload defaults and conditional validation for runtime/setup |
+| scripts/upload.py and upload/ | Central upload runner and Fastlane dependencies; no app-side CI files |
 | scripts/build.py | Runtime parameter validation, quality checks, Web/Android builds, artifact identity checks and iOS dispatch |
 | scripts/android.gradle | Temporary Android application-ID/suffix override and optional Jenkins-managed release signing |
 | scripts/prepare-ios.rb | Temporary Runner build-setting/plist name and bundle-ID overrides using xcodeproj |
@@ -73,7 +76,7 @@ iOS Jenkins signing requires a P12, password and an explicit profile matching Te
 
 Prior evidence from 2026-09-07: 11 runner tests, 16 automation tests, 12 native tests on Linux; Windows skipped one POSIX-specific native test. Real Ruby/xcodeproj adaptation and a fresh Flutter Web debug build passed with quality checks. Groovy compilation passed without executing Jenkins.
 
-Unverified: completed central Android APK/AAB builds, real Mac/Xcode builds/signing, live central Jenkins execution and app-commit-triggered polling, and fresh central bootstrap integration. Docker returned HTTP 500 during concurrent Gradle validation. Avoid repeating concurrent memory-heavy builds on the same host.
+Unverified: real Firebase/Google Play/App Store Connect uploads, completed central Android APK/AAB builds, real Mac/Xcode builds/signing, live central Jenkins execution and app-commit-triggered polling, and fresh central bootstrap integration. Docker returned HTTP 500 during concurrent Gradle validation. Avoid repeating concurrent memory-heavy builds on the same host.
 
 Historical temporary resources potentially needing inspection after Docker recovery: flutter-central-runner-validation and an anonymous optional native Gradle fixture. Verify identity/ownership before cleanup. Do not restart shared services or remove unrelated containers/volumes just to resume testing.
 

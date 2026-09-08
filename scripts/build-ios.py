@@ -243,7 +243,7 @@ def build(project):
                 verify_app(app, values, False)
                 run(["codesign", "--verify", "--deep", "--strict", app])
                 shutil.copy2(artifacts[0], output / "app.ipa")
-    (output / "SUCCESS").write_text("verified\n")
+    (output / "SUCCESS").write_text(f"{environment} {mode} ios\n", encoding="utf-8")
     print(f"Verified iOS {mode} artifact: {output}")
 
 if __name__ == "__main__":

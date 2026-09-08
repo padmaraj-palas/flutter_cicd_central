@@ -27,3 +27,9 @@ For iOS, use automation/scripts/macos_agent.py with --config, --agent-name, --re
 Keep secrets out of chat, answers and Git. The user can enter signing/Git credentials in Jenkins while the agent finishes independent work and resumes verification afterward.
 
 Only central CI publishing is relevant. There is no Flutter-app commit/push step. Report app compatibility limits, including hardcoded Dart API/UI values, rather than editing the app.
+
+## Upload settings on existing or new jobs
+
+The answers parameters also own upload destinations, credential IDs, Firebase app IDs/groups, Google Play track/status and optional release notes; see [PARAMETERS.md](PARAMETERS.md#automatic-uploads). Missing upload fields normalize to build-only defaults for older answers. The renderer includes the normalized fields. Explicit upload selections are validated together with the platform, build mode and iOS export method before job rendering.
+
+Add upload credentials as Jenkins Secret files through protected administration, then put only their IDs in answers. Follow [UPLOADS.md](UPLOADS.md) for each service. Update the central SCM ref to include upload support, reconcile saved UI settings, validate/render the answers, and use ensure-job for an existing controller. Do not bootstrap an existing Jenkins home. A build queues the saved upload settings too; use none while validating build-only infrastructure.

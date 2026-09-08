@@ -8,7 +8,7 @@ Start with [HOST_SETUP.md](HOST_SETUP.md), then [JENKINS_SETUP.md](JENKINS_SETUP
 
 The original [Flutter CI-CD.pdf](requirements/Flutter%20CI-CD.pdf) and [derived handover](requirements/FLUTTER_CICD_AGENT_HANDOVER.md) are included unchanged. They provide requirements/history; the current zero-app-files request governs this implementation.
 
-This implementation tests, builds and archives Android APK/AAB, Web output and iOS simulator ZIP/IPA. It does not upload to stores or deploy websites.
+This implementation tests, builds and archives Android APK/AAB, Web output and iOS simulator ZIP/IPA. Each Jenkins job can also select automatic Android uploads to Firebase or Google Play, and iOS uploads to Firebase or App Store Connect/TestFlight. All destinations default to none; Web remains archive only. See [UPLOADS.md](UPLOADS.md) for configuration and service prerequisites.
 
 ## Continuing work or configuring a job
 

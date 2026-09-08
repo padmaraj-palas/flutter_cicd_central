@@ -15,6 +15,10 @@ import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 
+# Shared upload contract lives with the central runtime, never in an app checkout.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import upload_settings
+
 CHOICES = {
     "ENVIRONMENT": ("testing", "staging", "production"),
     "BUILD_MODE": ("debug", "release"),
@@ -25,6 +29,7 @@ CHOICES = {
     "IOS_SIGNING_STYLE": ("manual", "automatic"),
     "IOS_CODE_SIGN_IDENTITY": ("Apple Distribution", "Apple Development"),
 }
+CHOICES.update(upload_settings.CHOICES)
 PARAMETERS = (
     "APP_REPOSITORY_URL", "APP_BRANCH", "APP_CREDENTIALS_ID",
     "ENVIRONMENT", "BUILD_MODE", "PLATFORM", "APP_NAME", "API_BASE_URL",
@@ -36,11 +41,27 @@ PARAMETERS = (
     "IOS_RELEASE_SIGNING", "IOS_TEAM_ID", "IOS_EXPORT_METHOD", "IOS_SIGNING_STYLE",
     "IOS_PROFILE_NAME", "IOS_CODE_SIGN_IDENTITY", "IOS_P12_CREDENTIAL_ID",
     "IOS_PASSWORD_CREDENTIAL_ID", "IOS_PROFILE_CREDENTIAL_ID",
-)
+) + tuple(upload_settings.DEFAULTS)
 CREDENTIALS = ("APP_CREDENTIALS_ID", "IOS_P12_CREDENTIAL_ID",
                "IOS_PASSWORD_CREDENTIAL_ID", "IOS_PROFILE_CREDENTIAL_ID",
                "ANDROID_KEYSTORE_CREDENTIAL_ID", "ANDROID_STORE_PASSWORD_CREDENTIAL_ID",
-               "ANDROID_KEY_ALIAS_CREDENTIAL_ID", "ANDROID_KEY_PASSWORD_CREDENTIAL_ID")
+               "ANDROID_KEY_ALIAS_CREDENTIAL_ID", "ANDROID_KEY_PASSWORD_CREDENTIAL_ID") + upload_settings.CREDENTIALS
+
+
+UPLOAD_DESCRIPTIONS = {
+    "ANDROID_UPLOAD_DESTINATION": "none archives only; firebase distributes to Firebase; google uploads a release AAB to Google Play.",
+    "IOS_UPLOAD_DESTINATION": "none archives only; firebase distributes a signed IPA; appstore uploads to App Store Connect/TestFlight without submitting for review.",
+    "WEB_UPLOAD_DESTINATION": "none archives only; web deployment is not yet available.",
+    "GOOGLE_PLAY_TRACK": "Google Play release track. Used only when Android upload destination is google.",
+    "GOOGLE_PLAY_RELEASE_STATUS": "draft saves a draft release; completed rolls out to the selected track.",
+    "FIREBASE_ANDROID_APP_ID": "Public Firebase Android app ID from Project settings (1:project-number:android:app-id).",
+    "FIREBASE_IOS_APP_ID": "Public Firebase iOS app ID from Project settings (1:project-number:ios:app-id).",
+    "FIREBASE_GROUPS": "Optional comma-separated Firebase tester group aliases, without spaces.",
+    "FIREBASE_CREDENTIALS_ID": "Jenkins Secret file credential ID for Firebase service-account JSON; never enter the JSON here.",
+    "GOOGLE_PLAY_CREDENTIALS_ID": "Jenkins Secret file credential ID for Google Play service-account JSON; never enter the JSON here.",
+    "APPSTORE_API_KEY_CREDENTIALS_ID": "Jenkins Secret file credential ID for Fastlane App Store Connect API-key JSON; never enter the JSON here.",
+    "UPLOAD_RELEASE_NOTES": "Optional public release notes, single line, at most 500 characters. Do not enter secrets.",
+}
 
 
 def fields(value, expected, label):
@@ -148,9 +169,13 @@ def validate(data):
     if not re.fullmatch(r"[A-Za-z0-9_.-]*", ci["credentials_id"]):
         raise ValueError("ci.credentials_id: provide a Jenkins credential ID, not its secret.")
     p = data["parameters"]
+    # Existing answer files remain build-only until upload settings are supplied.
+    if isinstance(p, dict):
+        for key, value in upload_settings.DEFAULTS.items():
+            p.setdefault(key, value)
     fields(p, PARAMETERS, "parameters")
     for key in PARAMETERS:
-        literal(p[key], key, empty=key in CREDENTIALS or key in (
+        literal(p[key], key, empty=key in upload_settings.DEFAULTS or key in CREDENTIALS or key in (
             "ANDROID_FLAVOR", "IOS_SCHEME", "IOS_TEAM_ID", "IOS_PROFILE_NAME"))
     for key, choices in CHOICES.items():
         if p[key] not in choices:
@@ -207,6 +232,7 @@ def validate(data):
     if (p["PLATFORM"] in ("android", "all") and p["BUILD_MODE"] == "release"
             and p["ANDROID_RELEASE_SIGNING"] == "jenkins" and not all(p[key] for key in android_credentials)):
         raise ValueError("Jenkins Android release signing requires all four credential IDs.")
+    p.update(upload_settings.validate(p))
     return data
 
 
@@ -244,14 +270,14 @@ def job_xml(data):
         if name in CHOICES:
             parameter = child(definitions, "hudson.model.ChoiceParameterDefinition")
             child(parameter, "name", name)
-            child(parameter, "description", "Saved setting for this job; edit Configure to change.")
+            child(parameter, "description", UPLOAD_DESCRIPTIONS.get(name, "Saved setting for this job; edit Configure to change."))
             array = child(child(parameter, "choices", **{"class": "java.util.Arrays$ArrayList"}),
                           "a", **{"class": "string-array"})
             child(array, "string", value)
         else:
             parameter = child(definitions, "hudson.model.StringParameterDefinition")
             child(parameter, "name", name)
-            child(parameter, "description", "Public setting / credential ID only. Do not enter a secret.")
+            child(parameter, "description", UPLOAD_DESCRIPTIONS.get(name, "Public setting / credential ID only. Do not enter a secret."))
             child(parameter, "defaultValue", value)
             child(parameter, "trim", "true")
     retention = child(child(properties, "jenkins.model.BuildDiscarderProperty"), "strategy",

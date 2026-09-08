@@ -59,6 +59,20 @@ APP_NAME allows 1-80 letters, digits, spaces, dots, underscores and hyphens, sta
 
 No environment or signing configuration files are read from the app. ENVIRONMENT is a build label/Dart define; it does not implicitly select native flavors. Parameters are applied only in the disposable checkout. Android namespace/source packages stay intact.
 
+## Configure automatic uploads
+
+In the same job parameter list, add the upload fields from [PARAMETERS.md](PARAMETERS.md#automatic-uploads). Choose a saved destination for each platform:
+
+| Platform parameter | Choices |
+| --- | --- |
+| ANDROID_UPLOAD_DESTINATION | none, firebase, google |
+| IOS_UPLOAD_DESTINATION | none, firebase, appstore |
+| WEB_UPLOAD_DESTINATION | none |
+
+All three default to none, including when absent from an existing job. Follow [UPLOADS.md](UPLOADS.md) to create the required service credentials and configure Firebase app IDs/groups or the Google Play track/status. Appstore uploads to App Store Connect/TestFlight without submitting to App Review. Save the choices before building; SCM-triggered builds use them too.
+
+For existing jobs, first update Pipeline SCM to a reviewed central revision containing upload support. Add fields manually, or update the protected answers file and run ensure-job against the existing controller. Reconcile any Jenkins UI edits before ensure-job, which reapplies the answer settings. The updated renderer includes upload fields; no fresh bootstrap or app repository changes are needed.
+
 ## Automatic builds and copies
 
 After the first successful app checkout, Poll SCM watches APP_BRANCH and queues builds using saved parameters. If the initial build fails before checkout, fix it and run once again.
@@ -74,3 +88,5 @@ One build uses the same app commit across Linux/Mac and pins the tooling revisio
 Under app/build/ci/<environment>/<mode>/<platform>: app.apk (Android debug), app.aab (Android release), app.zip (Web), app.zip (iOS simulator), app.ipa (iOS device release). Download them on the Jenkins build's Artifacts page. Native outputs are checked against requested IDs and names.
 
 References: [SCM polling](https://plugins.jenkins.io/workflow-scm-step/), [parameters](https://www.jenkins.io/doc/book/pipeline/syntax/#parameters), [copying jobs](https://www.jenkins.io/doc/book/using/working-with-projects/).
+
+Artifacts are archived before upload credentials are bound. A failed upload marks the build failed; the archived output remains downloadable.

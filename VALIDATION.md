@@ -54,3 +54,46 @@ Local Windows verification with Git for Windows Bash:
 These checks do not execute Jenkins or real platform builds. The correction
 must be published and the job's central SCM ref updated from v1.0.0 to a fixed
 revision before rerunning Jenkins. No live job, release tag or app was changed.
+
+## Configurable artifact uploads: 2026-09-08
+
+Implemented the user's per-job destination choices: Android none/firebase/google,
+iOS none/firebase/appstore, Web none. Missing new settings preserve build-only
+jobs. The setup renderer and runtime share upload validation. Upload stages run
+after platform archival and bind only the selected publishing credential. The
+appstore destination uploads to App Store Connect/TestFlight without App Review
+submission. Google Play track/status are configurable, defaulting to internal/draft.
+
+The native iOS runner previously wrote a generic SUCCESS marker that did not
+match Jenkins archive checks. It now writes the same environment/mode/platform
+marker as the other runners; the six native environment/mode cases assert it.
+
+Verification on Windows and disposable Linux containers:
+- Full central Python suite: 39 tests, 38 passed and one POSIX-only native signing
+  test skipped on Windows. Includes 11 upload tests and 5 pipeline shell tests.
+- Setup automation: 21 tests passed, including existing-answer migration,
+  rendered upload settings and conditional upload requirements.
+- Shell tests execute the actual Jenkinsfile wrapper with Docker stubbed, testing
+  unset/empty optional values, workspace spaces, credential-name forwarding and
+  nonzero Docker exit propagation.
+- An isolated container parsed the complete Jenkinsfile using Groovy and passed
+  six upload-helper stub cases: disabled uploads, provider credential selection,
+  installation before credential binding and binding scope cleanup. This is not
+  execution of a live Jenkins Pipeline or its Declarative engine.
+- A disposable Linux container installed the separate locked upload bundle:
+  Fastlane 2.239.0, Bundler 4.0.20, 101 gems. Ruby syntax and actual Fastlane
+  Supply/Pilot configuration checks passed, including absent release notes.
+  Service upload methods were stubbed, with no publishing operation.
+- All 41 setup parameters are covered in PARAMETERS.md; edited documentation
+  relative links and repository manifests were checked. Original requirement
+  files and their hashes remain unchanged.
+
+Commands: `python3 -B -m unittest discover -s tests -p 'test_*.py'` and
+`python3 -B -m unittest discover -s automation/scripts -p 'test_*.py'`.
+
+No real Firebase App Distribution, Google Play or App Store Connect upload has
+been performed. No Jenkins jobs, credentials, app repositories or release tags
+were changed. Publishing this central revision, configuring the destination and
+credentials, and verifying actual signed artifact acceptance remain required
+for live deployment. Linux dependency checks do not prove native Mac/Xcode,
+Apple Silicon bundle installation or Apple Transporter upload success.

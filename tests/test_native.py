@@ -73,6 +73,8 @@ class IOSBuildTests(unittest.TestCase):
                     self.build(environment, mode)
                     ext = "zip" if mode == "debug" else "ipa"
                     self.assertTrue((self.root / f"build/ci/{environment}/{mode}/ios/app.{ext}").is_file())
+                    marker = self.root / f"build/ci/{environment}/{mode}/ios/SUCCESS"
+                    self.assertEqual(marker.read_text(), f"{environment} {mode} ios\n")
                     command = next(c for c in reversed(self.commands) if c[:2] == ["flutter", "build"])
                     self.assertIn(f"--dart-define=ENVIRONMENT={environment}", command)
                     self.assertNotIn("--flavor", command)

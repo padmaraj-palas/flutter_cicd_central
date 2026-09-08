@@ -51,6 +51,86 @@ def archiveOutput(String platform) {
         (params.BUILD_MODE == 'debug' ? 'app.zip' : 'app.ipa'))
     archiveArtifacts artifacts: "${output}/${artifact}", fingerprint: true, allowEmptyArchive: false
 }
+
+// Saved public job values only. Missing upload fields preserve older build-only jobs.
+def uploadEnvironment() {
+    def keys = ['ANDROID_UPLOAD_DESTINATION', 'IOS_UPLOAD_DESTINATION', 'WEB_UPLOAD_DESTINATION',
+                'FIREBASE_ANDROID_APP_ID', 'FIREBASE_IOS_APP_ID', 'FIREBASE_GROUPS',
+                'FIREBASE_CREDENTIALS_ID', 'GOOGLE_PLAY_CREDENTIALS_ID', 'APPSTORE_API_KEY_CREDENTIALS_ID',
+                'GOOGLE_PLAY_TRACK', 'GOOGLE_PLAY_RELEASE_STATUS', 'UPLOAD_RELEASE_NOTES', 'PLATFORM']
+    return keys.collect { key -> "${key}=${params[key] ?: ''}" }
+}
+
+def linuxUploadRun(String action, String platform = '') {
+    withEnv(["CI_ACTION=${action}", "CI_PLATFORM=${platform}"]) {
+        sh '''
+            set +x
+            set -eu
+            set -- "$CI_ACTION"
+            if [ -n "${CI_PLATFORM:-}" ]; then
+                set -- "$@" --project "$WORKSPACE/app" --platform "$CI_PLATFORM"
+            fi
+            docker run --rm --volumes-from jenkins \
+              -v flutter-upload-gems:/opt/upload-gems \
+              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
+              -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE -e PLATFORM \
+              -e ANDROID_APPLICATION_ID -e IOS_BUNDLE_ID -e IOS_EXPORT_METHOD \
+              -e ANDROID_UPLOAD_DESTINATION -e IOS_UPLOAD_DESTINATION -e WEB_UPLOAD_DESTINATION \
+              -e FIREBASE_ANDROID_APP_ID -e FIREBASE_IOS_APP_ID -e FIREBASE_GROUPS \
+              -e FIREBASE_CREDENTIALS_ID -e GOOGLE_PLAY_CREDENTIALS_ID -e APPSTORE_API_KEY_CREDENTIALS_ID \
+              -e GOOGLE_PLAY_TRACK -e GOOGLE_PLAY_RELEASE_STATUS -e UPLOAD_RELEASE_NOTES \
+              -e FIREBASE_CREDENTIALS_FILE -e GOOGLE_PLAY_CREDENTIALS_FILE \
+              -w "$CI_ROOT" "$FLUTTER_IMAGE" \
+              python3 "$CI_ROOT/scripts/upload.py" "$@"
+        '''
+    }
+}
+
+def uploadArtifact(String platform) {
+    def destination = params["${platform.toUpperCase()}_UPLOAD_DESTINATION"] ?: 'none'
+    if (destination == 'none') { return }
+    // Install trusted central dependencies before binding publishing credentials.
+    if (platform == 'android' && destination == 'google') {
+        sh '''
+            set -eu
+            docker run --rm --volumes-from jenkins \
+              -v flutter-upload-gems:/opt/upload-gems \
+              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
+              -w "$CI_ROOT/upload" "$FLUTTER_IMAGE" sh -c 'bundle check || bundle install'
+        '''
+    }
+    if (platform == 'ios' && destination == 'appstore') {
+        sh '''
+            set -eu
+            export BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile"
+            export BUNDLE_PATH="$CI_ROOT/.upload-gems"
+            export BUNDLE_FROZEN=true
+            cd "$CI_ROOT/upload"
+            bundle check || bundle install
+        '''
+    }
+    def credential = destination == 'firebase' ? 'FIREBASE_CREDENTIALS_ID' :
+        (destination == 'google' ? 'GOOGLE_PLAY_CREDENTIALS_ID' : 'APPSTORE_API_KEY_CREDENTIALS_ID')
+    def binding = destination == 'firebase' ? 'FIREBASE_CREDENTIALS_FILE' :
+        (destination == 'google' ? 'GOOGLE_PLAY_CREDENTIALS_FILE' : 'APPSTORE_API_KEY_FILE')
+    if (!params[credential]) { error("Configure ${credential}") }
+    withEnv(uploadEnvironment()) {
+        withCredentials([file(credentialsId: params[credential], variable: binding)]) {
+            if (platform == 'android') { linuxUploadRun('upload', 'android') }
+            else {
+                sh '''
+                    set +x
+                    set -eu
+                    export BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile"
+                    export BUNDLE_PATH="$CI_ROOT/.upload-gems"
+                    export BUNDLE_FROZEN=true
+                    python3 "$CI_ROOT/scripts/upload.py" upload --project "$WORKSPACE/app" --platform ios
+                '''
+            }
+        }
+    }
+}
+
 pipeline {
     agent none
     options {
@@ -119,7 +199,12 @@ pipeline {
             agent { label "${params.LINUX_AGENT_LABEL}" }
             stages {
                 stage('Checkout Linux') { steps { script { checkoutSources() } } }
-                stage('Validate App Configuration') { steps { script { linuxRun('validate') } } }
+                stage('Validate App Configuration') {
+                    steps { script {
+                        linuxRun('validate')
+                        withEnv(uploadEnvironment()) { linuxUploadRun('validate') }
+                    } }
+                }
                 stage('Analyze and Test') { steps { script { linuxRun('quality') } } }
                 stage('Web') {
                     when { expression { params.PLATFORM in ['web', 'all'] } }
@@ -144,6 +229,10 @@ pipeline {
                         }
                     }
                 }
+                stage('Upload Android') {
+                    when { expression { params.PLATFORM in ['android', 'all'] && (params.ANDROID_UPLOAD_DESTINATION ?: 'none') != 'none' } }
+                    steps { script { uploadArtifact('android') } }
+                }
             }
         }
         stage('iOS Build') {
@@ -154,6 +243,11 @@ pipeline {
                 stage('Checkout macOS') { steps { script { checkoutSources() } } }
                 stage('Validate and Test iOS') {
                     steps {
+                        script {
+                            withEnv(uploadEnvironment()) {
+                                sh 'python3 "$CI_ROOT/scripts/upload.py" validate'
+                            }
+                        }
                         sh '''
                             set -eu
                             export BUNDLE_GEMFILE="$CI_ROOT/Gemfile"
@@ -185,6 +279,10 @@ pipeline {
                             archiveOutput('ios')
                         }
                     }
+                }
+                stage('Upload iOS') {
+                    when { expression { (params.IOS_UPLOAD_DESTINATION ?: 'none') != 'none' } }
+                    steps { script { uploadArtifact('ios') } }
                 }
             }
         }

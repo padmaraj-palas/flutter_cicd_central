@@ -6,7 +6,7 @@ This reference describes the current central implementation. Allowed choices and
 
 In a job, open **Configure > General > This project is parameterized**. Add Choice Parameters with **one selected value** per job, or String Parameters with the chosen value in **Default Value**. Jenkins uses these saved settings for automatic builds. The pipeline does not redefine them.
 
-In automation, the same uppercase names are keys inside the parameters object in [answers.example.json](automation/answers.example.json). The helper requires **every listed key**, even when its explicit value is empty or the platform does not use it. Every Choice key needs a valid choice even when unused. Examples below are illustrative, not values to copy without confirmation.
+In automation, the same uppercase names are keys inside the parameters object in [answers.example.json](automation/answers.example.json). The helper requires every original build/signing key, even when its explicit value is empty or the platform does not use it. Upload fields may be omitted for compatibility: destinations default to none, Google Play track to internal, release status to draft, and upload strings to empty. Every supplied Choice key needs a valid choice even when unused. Examples below are illustrative, not values to copy without confirmation.
 
 All values are case-sensitive. Strings must be single-line without leading/trailing whitespace. Credential IDs accept letters, digits, underscores, dots and hyphens; they are references to credentials, not secrets.
 
@@ -74,6 +74,29 @@ For ios/all + release: Team ID is required; manual style also requires profile N
 
 With existing-keychain, all three Jenkins signing IDs must be empty, including in setup for non-iOS/debug jobs. The Mac must already have a usable identity/profile. Debug builds create an unsigned simulator ZIP and need no Apple signing assets.
 
+## Automatic uploads
+
+Uploads run after the platform artifact is successfully built, verified and archived. Destinations are independent saved job settings; `PLATFORM=all` uses each platform's setting. Existing jobs with no upload parameters continue to build/archive only. See [UPLOADS.md](UPLOADS.md) for credentials, service preparation and examples.
+
+| Parameter | Type | Possible values / default | Short description |
+| --- | --- | --- | --- |
+| ANDROID_UPLOAD_DESTINATION | Choice | none, firebase, google; default none | Archive only, Firebase App Distribution, or Google Play. |
+| IOS_UPLOAD_DESTINATION | Choice | none, firebase, appstore; default none | Archive only, Firebase App Distribution, or App Store Connect/TestFlight upload. |
+| WEB_UPLOAD_DESTINATION | Choice | none | Reserved for future deployment; currently archive only. |
+| FIREBASE_ANDROID_APP_ID | String | Empty or 1:1234567890:android:abc123 | Required for selected Android Firebase upload; Firebase app ID, not Android package name. |
+| FIREBASE_IOS_APP_ID | String | Empty or 1:1234567890:ios:abc123 | Required for selected iOS Firebase upload; Firebase app ID, not bundle ID. |
+| FIREBASE_GROUPS | String | Empty or qa-team,internal-testers | Comma-separated group aliases without spaces; letters, digits, underscores and hyphens. Empty uploads without selecting tester groups. |
+| FIREBASE_CREDENTIALS_ID | String | Empty or firebase-distribution | Jenkins Secret file ID holding a Google service-account JSON with Firebase App Distribution access. Required for either selected Firebase destination. |
+| GOOGLE_PLAY_CREDENTIALS_ID | String | Empty or google-play-upload | Jenkins Secret file ID holding Google Play service-account JSON. Required for selected google destination. |
+| GOOGLE_PLAY_TRACK | Choice | internal, alpha, beta, production; default internal | Google Play track for the uploaded release. |
+| GOOGLE_PLAY_RELEASE_STATUS | Choice | draft, completed; default draft | draft retains a draft release; completed requests release on the selected track, subject to Play requirements/review. |
+| APPSTORE_API_KEY_CREDENTIALS_ID | String | Empty or appstore-upload | Jenkins Secret file ID holding Fastlane App Store Connect API-key JSON. Required for selected appstore destination. |
+| UPLOAD_RELEASE_NOTES | String | Empty by default; up to 500 characters | Optional trimmed single-line release notes; no secrets. |
+
+Android Firebase uses the current output: debug APK or release AAB. Firebase AAB distribution requires Google Play linkage and its prerequisites. Google Play requires BUILD_MODE=release and a correctly signed AAB. iOS uploads require BUILD_MODE=release and a signed IPA: Firebase accepts IOS_EXPORT_METHOD=release-testing, debugging or enterprise; appstore requires app-store-connect. Simulator archives cannot be uploaded. The appstore destination uploads the binary to App Store Connect for TestFlight; it does not submit an App Review request or automatically release the app publicly.
+
+Signing credentials and upload credentials serve separate purposes. Upload credentials are bound only in the upload stage, after artifact archival. An upload failure fails the build while preserving its archived artifact. Selecting an upload destination enables uploads on automatic SCM builds too.
+
 ## Central SCM and setup-only fields
 
 These are not additional uppercase Jenkins job parameters. They live in answers.json or the Pipeline SCM configuration.
@@ -105,6 +128,7 @@ Host OS/access, Docker context/storage/port, Xcode installation and Mac node nam
 | JENKINS_USER / JENKINS_API_TOKEN | Protected setup-helper authentication; never put secrets in public parameters or answers |
 | ANDROID_KEYSTORE_FILE / ANDROID_STORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD | Runtime bindings created by Jenkins from the four Android credential IDs; do not add them as public job parameters |
 | IOS_P12_FILE / IOS_P12_PASSWORD / IOS_PROFILE_FILE | Runtime bindings created by Jenkins from the three iOS credential IDs; do not add them as public job parameters |
+| FIREBASE_CREDENTIALS_FILE / GOOGLE_PLAY_CREDENTIALS_FILE / APPSTORE_API_KEY_FILE | Runtime secret-file bindings created only for the selected upload stage; not public parameters |
 
 CI_ROOT, CI_COMMIT, APP_COMMIT, WORKSPACE, CI_ACTION and CI_PLATFORM are internal build context, not user configuration.
 

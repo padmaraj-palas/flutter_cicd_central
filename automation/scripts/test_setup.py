@@ -75,7 +75,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(values["APP_NAME"], "Your App")
 
     def test_no_implicit_settings_and_no_secret_fields(self):
-        for key in setup.PARAMETERS:
+        for key in set(setup.PARAMETERS) - set(setup.upload_settings.DEFAULTS):
             with self.subTest(missing=key):
                 changed = copy.deepcopy(self.data)
                 del changed["parameters"][key]
@@ -88,6 +88,78 @@ class SetupTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 setup.validate(changed)
+
+    def test_legacy_answers_default_to_no_uploads_and_render_all_settings(self):
+        for key in setup.upload_settings.DEFAULTS:
+            del self.data["parameters"][key]
+        root = ET.fromstring(setup.job_xml(self.data))
+        definitions = root.find("properties/hudson.model.ParametersDefinitionProperty/parameterDefinitions")
+        params = {node.findtext("name"): node for node in definitions}
+        for key, value in setup.upload_settings.DEFAULTS.items():
+            self.assertEqual(self.data["parameters"][key], value)
+            if key in setup.CHOICES:
+                self.assertEqual(params[key].findtext("choices/a/string"), value)
+            else:
+                self.assertEqual(params[key].findtext("defaultValue") or "", value)
+
+    def test_upload_destination_choices_and_credential_values_are_checked(self):
+        for key, value in (("ANDROID_UPLOAD_DESTINATION", "appstore"),
+                           ("IOS_UPLOAD_DESTINATION", "google"),
+                           ("WEB_UPLOAD_DESTINATION", "firebase"),
+                           ("GOOGLE_PLAY_TRACK", "other"),
+                           ("GOOGLE_PLAY_RELEASE_STATUS", "other"),
+                           ("FIREBASE_CREDENTIALS_ID", '{"private_key":"secret"}'),
+                           ("APPSTORE_API_KEY_CREDENTIALS_ID", "/tmp/api-key.json"),
+                           ("UPLOAD_RELEASE_NOTES", "first\nsecond")):
+            with self.subTest(key=key):
+                changed = copy.deepcopy(self.data)
+                changed["parameters"][key] = value
+                with self.assertRaises(ValueError):
+                    setup.validate(changed)
+
+    def test_android_google_upload_requires_release_and_credentials(self):
+        p = self.data["parameters"]
+        p.update(ANDROID_UPLOAD_DESTINATION="google")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+        p.update(BUILD_MODE="release")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+        p.update(GOOGLE_PLAY_CREDENTIALS_ID="play-service-account")
+        setup.validate(self.data)
+        root = ET.fromstring(setup.job_xml(self.data))
+        definitions = root.find("properties/hudson.model.ParametersDefinitionProperty/parameterDefinitions")
+        params = {node.findtext("name"): node for node in definitions}
+        self.assertEqual(params["ANDROID_UPLOAD_DESTINATION"].findtext("choices/a/string"), "google")
+        self.assertEqual(params["GOOGLE_PLAY_CREDENTIALS_ID"].findtext("defaultValue"), "play-service-account")
+        p.update(GOOGLE_PLAY_CREDENTIALS_ID="")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+
+    def test_firebase_upload_requires_app_id_and_service_account(self):
+        p = self.data["parameters"]
+        p.update(ANDROID_UPLOAD_DESTINATION="firebase")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+        p.update(FIREBASE_ANDROID_APP_ID="1:123456789:android:abcdef123456",
+                 FIREBASE_CREDENTIALS_ID="firebase-service-account")
+        setup.validate(self.data)
+        p.update(FIREBASE_ANDROID_APP_ID="")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+
+    def test_appstore_upload_requires_device_release_and_store_export(self):
+        p = self.data["parameters"]
+        p.update(PLATFORM="ios", IOS_UPLOAD_DESTINATION="appstore",
+                 APPSTORE_API_KEY_CREDENTIALS_ID="appstore-key")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+        p.update(BUILD_MODE="release", IOS_TEAM_ID="A1B2C3D4E5",
+                 IOS_PROFILE_NAME="Your App Store Profile")
+        with self.assertRaises(ValueError):
+            setup.validate(self.data)
+        p.update(IOS_EXPORT_METHOD="app-store-connect")
+        setup.validate(self.data)
 
     def test_reject_unsafe_refs_and_urls(self):
         for key, value in (

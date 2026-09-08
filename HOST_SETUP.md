@@ -260,3 +260,9 @@ The supplied host files build Android and Web infrastructure. iOS uses the inclu
 ## iOS build host
 
 Android/Web continue using the Linux Docker image. Add a native macOS Jenkins agent using [IOS_SETUP.md](IOS_SETUP.md) and the scripts in host/macos (macos/ relative to this host folder). iOS-only jobs can use an existing reachable controller without a Linux build executor. The Mac needs its own Xcode, Flutter, Ruby/Bundler, Python and Java installation; no signing assets are bundled.
+
+## Optional artifact uploads
+
+Upload destinations are configured per Jenkins job using [UPLOADS.md](UPLOADS.md). Google Play uses centrally managed Fastlane dependencies; Firebase uses the build image's Firebase CLI. Use the reviewed image/tooling revision that includes upload support. The host and build containers need outbound access to the selected service APIs. Store service JSON files in Jenkins credentials, not in the image or Flutter source.
+
+This feature does not change the supplied host architecture: Web/Android use the documented x86-64 Docker topology and iOS uses a native Mac agent. Apple Silicon Docker hosting is not supported by these recipes.
