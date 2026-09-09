@@ -72,25 +72,15 @@ def upload(project, platform, environ=None):
         child = {key: environ[key] for key in HOST_ENV if environ.get(key)}
         child.setdefault("LANG", "en_US.UTF-8")
         child.update(HOME=str(work), USERPROFILE=str(work), XDG_CONFIG_HOME=str(work / "config"), CI="true", FASTLANE_OPT_OUT_USAGE="1", FASTLANE_SKIP_UPDATE_CHECK="1", FASTLANE_DISABLE_COLORS="1")
-        if destination == "firebase":
-            child["GOOGLE_APPLICATION_CREDENTIALS"] = credential
-            command = ["firebase", "appdistribution:distribute", str(artifact), "--app", values[f"FIREBASE_{platform.upper()}_APP_ID"], "--non-interactive"]
-            if values["FIREBASE_GROUPS"]:
-                command += ["--groups", values["FIREBASE_GROUPS"]]
-            if values["UPLOAD_RELEASE_NOTES"]:
-                notes = work / "notes.txt"
-                notes.write_text(values["UPLOAD_RELEASE_NOTES"], encoding="utf-8")
-                command += ["--release-notes-file", str(notes)]
-        else:
-            child.update({key: values.get(key, "") for key in ("ANDROID_APPLICATION_ID", "IOS_BUNDLE_ID", "GOOGLE_PLAY_TRACK", "GOOGLE_PLAY_RELEASE_STATUS", "UPLOAD_RELEASE_NOTES")})
-            (work / "metadata").mkdir()
-            child[binding] = credential
-            child.update(BUNDLE_GEMFILE=str(CENTRAL / "upload/Gemfile"), BUNDLE_FROZEN="true", CI_UPLOAD_DESTINATION=destination, CI_UPLOAD_ARTIFACT=str(artifact), CI_UPLOAD_METADATA=str(work / "metadata"))
-            if destination == "google" and values["UPLOAD_RELEASE_NOTES"]:
-                changelogs = work / "metadata/en-US/changelogs"
-                changelogs.mkdir(parents=True)
-                (changelogs / "default.txt").write_text(values["UPLOAD_RELEASE_NOTES"], encoding="utf-8")
-            command = ["bundle", "exec", "ruby", str(CENTRAL / "upload/run.rb")]
+        child.update({key: values.get(key, "") for key in ("ANDROID_APPLICATION_ID", "IOS_BUNDLE_ID", "GOOGLE_PLAY_TRACK", "GOOGLE_PLAY_RELEASE_STATUS", "UPLOAD_RELEASE_NOTES", "FIREBASE_ANDROID_APP_ID", "FIREBASE_IOS_APP_ID", "FIREBASE_GROUPS")})
+        (work / "metadata").mkdir()
+        child[binding] = credential
+        child.update(BUNDLE_GEMFILE=str(CENTRAL / "scripts/upload/Gemfile"), BUNDLE_FROZEN="true", CI_UPLOAD_DESTINATION=destination, CI_UPLOAD_PLATFORM=platform, CI_UPLOAD_ARTIFACT=str(artifact), CI_UPLOAD_METADATA=str(work / "metadata"))
+        if destination == "google" and values["UPLOAD_RELEASE_NOTES"]:
+            changelogs = work / "metadata/en-US/changelogs"
+            changelogs.mkdir(parents=True)
+            (changelogs / "default.txt").write_text(values["UPLOAD_RELEASE_NOTES"], encoding="utf-8")
+        command = ["bundle", "exec", "ruby", str(CENTRAL / "scripts/upload/run.rb")]
         # Service tools may print key material in diagnostics. Do not forward their output.
         try:
             subprocess.run(command, cwd=work, env=child, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

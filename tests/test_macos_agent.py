@@ -11,6 +11,8 @@ import unittest
 import xml.etree.ElementTree as ET
 
 sys.dont_write_bytecode = True
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "automation/scripts"))
 import macos_agent
 
 
@@ -37,7 +39,7 @@ class AgentClient:
 
 class AgentTests(unittest.TestCase):
     def setUp(self):
-        self.config = json.loads((Path(__file__).resolve().parents[1] / "answers.example.json").read_text(encoding="utf-8-sig"))
+        self.config = json.loads((REPO / "automation/answers.example.json").read_text(encoding="utf-8-sig"))
 
     def test_owned_node_secret_saved_without_output_and_owner_only(self):
         client = AgentClient(self.config)

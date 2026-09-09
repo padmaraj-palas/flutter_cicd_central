@@ -171,7 +171,7 @@ def build(project):
     child_env = os.environ.copy()
     for key in ("IOS_P12_FILE", "IOS_P12_PASSWORD", "IOS_PROFILE_FILE"):
         child_env.pop(key, None)
-    child_env["BUNDLE_GEMFILE"] = str(CENTRAL / "Gemfile")
+    child_env["BUNDLE_GEMFILE"] = str(CENTRAL / "scripts/ios/Gemfile")
     output = root / f"build/ci/{environment}/{mode}/ios"
     if not output.resolve().is_relative_to(root):
         raise ValueError("Artifact output escaped the disposable checkout.")
@@ -180,7 +180,7 @@ def build(project):
         (output / name).unlink(missing_ok=True)
     run(["xcodebuild", "-version"])
     run(["xcrun", "--sdk", "iphonesimulator" if mode == "debug" else "iphoneos", "--show-sdk-path"])
-    run(["bundle", "exec", "ruby", CENTRAL / "scripts/prepare-ios.rb", root], cwd=root, env=child_env)
+    run(["bundle", "exec", "ruby", CENTRAL / "scripts/ios/prepare.rb", root], cwd=root, env=child_env)
     defines = [f"--dart-define={key}={values[key]}" for key in ("ENVIRONMENT", "APP_NAME", "API_BASE_URL") if key in values]
     if mode == "debug":
         # Clean native output so stale artifacts can never satisfy a successful no-op build.

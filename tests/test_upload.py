@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -39,26 +39,64 @@ class UploadTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_firebase_command_scopes_secrets_and_cwd(self):
-        self.env.update(ANDROID_UPLOAD_DESTINATION="firebase", FIREBASE_GROUPS="qa,staff", UPLOAD_RELEASE_NOTES="New build", IOS_P12_PASSWORD="SIGN SECRET", FIREBASE_TOKEN="TOKEN", NODE_OPTIONS="--require evil.js")
+        self.env.update(ANDROID_UPLOAD_DESTINATION="firebase", FIREBASE_GROUPS="qa,staff", UPLOAD_RELEASE_NOTES="New build", IOS_P12_PASSWORD="SIGN SECRET", FIREBASE_TOKEN="TOKEN", GOOGLE_APPLICATION_CREDENTIALS="ambient.json", RUBYOPT="-revil", NODE_OPTIONS="--require evil.js")
         artifact = self.artifact()
         def check(command, **kwargs):
-            self.assertEqual(command[:3], ["firebase", "appdistribution:distribute", str(artifact)])
-            self.assertIn("--groups", command)
-            self.assertEqual(kwargs["env"]["GOOGLE_APPLICATION_CREDENTIALS"], str(self.key))
-            for secret in ("IOS_P12_PASSWORD", "FIREBASE_TOKEN", "NODE_OPTIONS", "GOOGLE_PLAY_CREDENTIALS_FILE"):
+            self.assertEqual(command, ["bundle", "exec", "ruby", str(upload.CENTRAL / "scripts/upload/run.rb")])
+            child = kwargs["env"]
+            self.assertEqual(child["CI_UPLOAD_DESTINATION"], "firebase")
+            self.assertEqual(child["CI_UPLOAD_PLATFORM"], "android")
+            self.assertEqual(child["CI_UPLOAD_ARTIFACT"], str(artifact))
+            self.assertEqual(child["BUNDLE_GEMFILE"], str(upload.CENTRAL / "scripts/upload/Gemfile"))
+            self.assertEqual(child["BUNDLE_FROZEN"], "true")
+            self.assertEqual(child["FIREBASE_GROUPS"], "qa,staff")
+            self.assertEqual(child["UPLOAD_RELEASE_NOTES"], "New build")
+            self.assertEqual(child["FIREBASE_CREDENTIALS_FILE"], str(self.key))
+            for secret in ("IOS_P12_PASSWORD", "FIREBASE_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "RUBYOPT", "NODE_OPTIONS", "GOOGLE_PLAY_CREDENTIALS_FILE"):
                 self.assertNotIn(secret, kwargs["env"])
             self.assertNotEqual(kwargs["cwd"], self.root)
             self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
         with patch.object(upload.subprocess, "run", side_effect=check):
             upload.upload(str(self.root), "android", self.env)
 
+    def test_firebase_artifact_matrix_and_empty_optional_fields(self):
+        for platform, mode in (("android", "debug"), ("android", "release"), ("ios", "release")):
+            with self.subTest(platform=platform, mode=mode):
+                env = {**self.env, "PLATFORM": platform, "BUILD_MODE": mode,
+                       f"{platform.upper()}_UPLOAD_DESTINATION": "firebase",
+                       "IOS_EXPORT_METHOD": "release-testing", "BUNDLE_PATH": "/opt/upload-gems"}
+                artifact = self.artifact(platform, mode)
+                with patch.object(upload.subprocess, "run") as run:
+                    upload.upload(str(self.root), platform, env)
+                child = run.call_args.kwargs["env"]
+                self.assertEqual(child["CI_UPLOAD_PLATFORM"], platform)
+                self.assertEqual(child["CI_UPLOAD_ARTIFACT"], str(artifact))
+                self.assertEqual(child[f"FIREBASE_{platform.upper()}_APP_ID"], env[f"FIREBASE_{platform.upper()}_APP_ID"])
+                self.assertEqual(child["FIREBASE_GROUPS"], "")
+                self.assertEqual(child["UPLOAD_RELEASE_NOTES"], "")
+                self.assertEqual(child["BUNDLE_PATH"], "/opt/upload-gems")
+                self.assertFalse(run.call_args.kwargs["cwd"].exists())
+
+    def test_firebase_failure_is_sanitized(self):
+        self.env["ANDROID_UPLOAD_DESTINATION"] = "firebase"
+        self.artifact()
+        for error, expected in ((FileNotFoundError(), "Upload tool is missing"),
+                                (subprocess.CalledProcessError(7, ["PRIVATE SECRET"], stderr="PRIVATE SECRET"), "firebase upload failed ")):
+            with self.subTest(error=type(error).__name__), patch.object(upload.subprocess, "run", side_effect=error):
+                with self.assertRaises(ValueError) as caught:
+                    upload.upload(str(self.root), "android", self.env)
+                self.assertIn(expected, str(caught.exception))
+                self.assertNotIn("PRIVATE SECRET", str(caught.exception))
+
     def test_google_uses_central_ruby_and_metadata(self):
         self.env.update(ANDROID_UPLOAD_DESTINATION="google", UPLOAD_RELEASE_NOTES="New build", BUNDLE_PATH="/opt/gems")
         self.artifact()
         def check(command, **kwargs):
             self.assertEqual(command[:3], ["bundle", "exec", "ruby"])
-            self.assertEqual(Path(command[3]), upload.CENTRAL / "upload/run.rb")
+            self.assertEqual(Path(command[3]), upload.CENTRAL / "scripts/upload/run.rb")
             self.assertEqual(kwargs["env"]["BUNDLE_PATH"], "/opt/gems")
+            self.assertEqual(Path(kwargs["env"]["BUNDLE_GEMFILE"]), upload.CENTRAL / "scripts/upload/Gemfile")
+            self.assertTrue(Path(command[3]).is_file())
             self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", kwargs["env"])
             self.assertEqual((kwargs["cwd"] / "metadata/en-US/changelogs/default.txt").read_text(), "New build")
         with patch.object(upload.subprocess, "run", side_effect=check):

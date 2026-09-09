@@ -10,6 +10,8 @@ import urllib.error
 import xml.etree.ElementTree as ET
 
 sys.dont_write_bytecode = True
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "automation/scripts"))
 import setup
 
 
@@ -29,13 +31,13 @@ class FakeClient:
 
 class SetupTests(unittest.TestCase):
     def setUp(self):
-        self.data = json.loads((Path(__file__).resolve().parents[1] / "answers.example.json").read_text(encoding="utf-8-sig"))
+        self.data = json.loads((REPO / "automation/answers.example.json").read_text(encoding="utf-8-sig"))
         self.data["confirmed"] = True
 
     def test_job_separates_central_scm_from_application_and_persists_one_choice(self):
         root = ET.fromstring(setup.job_xml(self.data))
         self.assertEqual(root.findtext(".//hudson.plugins.git.UserRemoteConfig/url"), self.data["ci"]["repository_url"])
-        self.assertEqual(root.findtext(".//hudson.plugins.git.BranchSpec/name"), "refs/tags/v1.0.0")
+        self.assertEqual(root.findtext(".//hudson.plugins.git.BranchSpec/name"), "refs/tags/your-reviewed-fixed-release")
         self.assertEqual(root.findtext("definition/scriptPath"), "Jenkinsfile")
         definitions = root.find("properties/hudson.model.ParametersDefinitionProperty/parameterDefinitions")
         params = {node.findtext("name"): node for node in definitions}
@@ -73,6 +75,74 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(values["ENVIRONMENT"], "production")
         self.assertEqual(values["APP_BRANCH"], "main")
         self.assertEqual(values["APP_NAME"], "Your App")
+
+    def test_spaced_job_name_is_preserved_and_encoded_for_create_update_build_and_status(self):
+        self.data["job_name"] = "Android Staging Release"
+        setup.validate(self.data)
+        encoded = "Android%20Staging%20Release"
+        path = "job/" + encoded + "/"
+        xml = setup.job_xml(self.data)
+        self.assertEqual(ET.fromstring(xml).findtext("description"), setup.ownership(self.data))
+        with tempfile.TemporaryDirectory() as directory:
+            client = FakeClient()
+            result = setup.ensure_job(client, self.data, directory)
+            self.assertEqual(result, {"action": "created", "job_name": "Android Staging Release"})
+            self.assertEqual([(r[0], r[1]) for r in client.requests],
+                             [("GET", path + "config.xml"), ("POST", "createItem?name=" + encoded)])
+            self.assertEqual(client.requests[-1][2], xml)
+            client = FakeClient(xml)
+            result = setup.ensure_job(client, self.data, directory)
+            self.assertEqual(result["action"], "updated")
+            self.assertEqual(Path(result["backup"]).read_bytes(), xml)
+            self.assertTrue(Path(result["backup"]).name.startswith("Android Staging Release-before-"))
+            self.assertEqual([(r[0], r[1]) for r in client.requests],
+                             [("GET", path + "config.xml"), ("POST", path + "config.xml")])
+        client = FakeClient(xml)
+        self.assertEqual(setup.build_job(client, self.data)["queue_id"], 42)
+        self.assertEqual([(r[0], r[1]) for r in client.requests],
+                         [("GET", path + "config.xml"), ("POST", path + "buildWithParameters")])
+        self.assertEqual(client.requests[-1][2], b"")
+        client = FakeClient(b'{"name":"Android Staging Release"}')
+        self.assertEqual(setup.status_job(client, self.data)["name"], self.data["job_name"])
+        self.assertTrue(client.requests[-1][1].startswith(path + "api/json?"))
+        setup.status_job(client, self.data, build_number=7)
+        self.assertTrue(client.requests[-1][1].startswith(path + "7/api/json?"))
+        setup.status_job(client, self.data, queue_id=42)
+        self.assertTrue(client.requests[-1][1].startswith("queue/item/42/api/json?"))
+        unrelated = copy.deepcopy(self.data)
+        unrelated["project_id"] = "unrelated"
+        with tempfile.TemporaryDirectory() as directory:
+            for operation in (lambda c: setup.ensure_job(c, self.data, directory),
+                              lambda c: setup.build_job(c, self.data)):
+                client = FakeClient(setup.job_xml(unrelated))
+                with self.assertRaises(ValueError):
+                    operation(client)
+                self.assertEqual([(r[0], r[1]) for r in client.requests], [("GET", path + "config.xml")])
+
+    def test_job_names_reject_unsafe_paths_controls_and_surrounding_spaces(self):
+        for name in ("", " Android Staging Release", "Android Staging Release ", "../job", ".", "..",
+                     "folder/job", "folder\\job", "Android%2FRelease", "Android?build=1", "Android#release",
+                     "Android\nRelease", "Android\rRelease", "Android\tRelease", "Android\x00Release",
+                     "Android\x7fRelease", "Android\u00a0Release", "1Android", "A" * 81):
+            with self.subTest(name=name):
+                changed = copy.deepcopy(self.data)
+                changed["job_name"] = name
+                with self.assertRaises(ValueError):
+                    setup.validate(changed)
+        for name in ("A", "A" * 80, "Android  Staging_Release-1.0"):
+            changed = copy.deepcopy(self.data)
+            changed["job_name"] = name
+            setup.validate(changed)
+
+    def test_project_id_still_disallows_spaces(self):
+        for name in ("Android Staging Release", "project ", " project", "folder/project", "A" * 81):
+            with self.subTest(name=name):
+                changed = copy.deepcopy(self.data)
+                changed["project_id"] = name
+                with self.assertRaises(ValueError):
+                    setup.validate(changed)
+        self.data["project_id"] = "Android-Staging_Release.1"
+        setup.validate(self.data)
 
     def test_no_implicit_settings_and_no_secret_fields(self):
         for key in set(setup.PARAMETERS) - set(setup.upload_settings.DEFAULTS):

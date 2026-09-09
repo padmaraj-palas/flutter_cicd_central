@@ -34,7 +34,7 @@ docker compose -f "$script_root/compose.yaml" --profile tools config --quiet
 if docker container inspect jenkins >/dev/null 2>&1; then
   if [[ "$allow_existing" != true ]]; then
     echo "Container 'jenkins' already exists. This new-host setup must not replace it." >&2
-    echo "Use --allow-existing for read-only diagnostics only; see HOST_SETUP.md." >&2
+    echo "Use --allow-existing for read-only diagnostics only; see documents/SETUP_LINUX.md or documents/SETUP_WINDOWS_WSL.md in the central repository." >&2
     exit 1
   fi
   echo "Existing Jenkins detected; diagnostic mode only."

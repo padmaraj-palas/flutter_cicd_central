@@ -4,7 +4,7 @@ require 'xcodeproj'
 require 'rexml/document'
 require 'pathname'
 
-abort 'Usage: prepare-ios.rb PROJECT' unless ARGV.length == 1
+abort 'Usage: prepare.rb PROJECT' unless ARGV.length == 1
 root = File.realpath(ARGV[0])
 name = ENV.fetch('APP_NAME', '')
 bundle_id = ENV.fetch('IOS_BUNDLE_ID', '')

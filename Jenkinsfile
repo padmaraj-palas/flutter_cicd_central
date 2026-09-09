@@ -24,6 +24,7 @@ def checkoutSources() {
 def linuxRun(String action, String platform = '') {
     withEnv(["CI_ACTION=${action}", "CI_PLATFORM=${platform}"]) {
         sh '''
+            set +x
             set -eu
             set -- "$CI_ACTION" --project "$WORKSPACE/app"
             # Jenkins withEnv unsets variables assigned an empty value.
@@ -36,6 +37,27 @@ def linuxRun(String action, String platform = '') {
                 if docker container inspect jenkins >/dev/null 2>&1; then
                     docker run --rm --volumes-from jenkins "$@"
                 else
+                    # Secret files are siblings of WORKSPACE, not inside its bind mount.
+                    # Expose only this signing file for the credential-bound release step.
+                    ci_secret_file=
+                    if [ "$CI_ACTION" = build ] && [ "${CI_PLATFORM:-}" = android ] &&
+                       [ "${BUILD_MODE:-}" = release ] && [ "${ANDROID_RELEASE_SIGNING:-}" = jenkins ]; then
+                        ci_secret_file="${ANDROID_KEYSTORE_FILE:?Missing Jenkins Android keystore binding}"
+                    fi
+                    if [ -n "$ci_secret_file" ]; then
+                        case "$ci_secret_file" in
+                            /*) ;;
+                            *) echo 'ERROR: Credential binding must be an absolute file path.' >&2; return 1 ;;
+                        esac
+                        if [ ! -f "$ci_secret_file" ] || [ ! -r "$ci_secret_file" ]; then
+                            echo 'ERROR: Credential binding must reference a readable file.' >&2
+                            return 1
+                        fi
+                        # Docker --mount uses CSV. Quote fields for spaces, commas and quotes.
+                        ci_csv_path=$(printf '%s' "$ci_secret_file" | sed 's/"/""/g')
+                        ci_secret_mount=$(printf 'type=bind,"source=%s","target=%s",readonly' "$ci_csv_path" "$ci_csv_path")
+                        set -- --mount "$ci_secret_mount" "$@"
+                    fi
                     docker run --rm -v "$WORKSPACE:$WORKSPACE" "$@"
                 fi
             }
@@ -89,12 +111,34 @@ def linuxUploadRun(String action, String platform = '') {
                 if docker container inspect jenkins >/dev/null 2>&1; then
                     docker run --rm --volumes-from jenkins "$@"
                 else
+                    # Upload credentials remain scoped to the selected provider and step.
+                    ci_secret_file=
+                    if [ "$CI_ACTION" = upload ]; then
+                        case "${ANDROID_UPLOAD_DESTINATION:-none}" in
+                            firebase) ci_secret_file="${FIREBASE_CREDENTIALS_FILE:?Missing Jenkins Firebase binding}" ;;
+                            google) ci_secret_file="${GOOGLE_PLAY_CREDENTIALS_FILE:?Missing Jenkins Google Play binding}" ;;
+                        esac
+                    fi
+                    if [ -n "$ci_secret_file" ]; then
+                        case "$ci_secret_file" in
+                            /*) ;;
+                            *) echo 'ERROR: Credential binding must be an absolute file path.' >&2; return 1 ;;
+                        esac
+                        if [ ! -f "$ci_secret_file" ] || [ ! -r "$ci_secret_file" ]; then
+                            echo 'ERROR: Credential binding must reference a readable file.' >&2
+                            return 1
+                        fi
+                        # Docker --mount uses CSV. Quote fields for spaces, commas and quotes.
+                        ci_csv_path=$(printf '%s' "$ci_secret_file" | sed 's/"/""/g')
+                        ci_secret_mount=$(printf 'type=bind,"source=%s","target=%s",readonly' "$ci_csv_path" "$ci_csv_path")
+                        set -- --mount "$ci_secret_mount" "$@"
+                    fi
                     docker run --rm -v "$WORKSPACE:$WORKSPACE" "$@"
                 fi
             }
             ci_docker_run \
               -v flutter-upload-gems:/opt/upload-gems \
-              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
+              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/scripts/upload/Gemfile" \
               -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE -e PLATFORM \
               -e ANDROID_APPLICATION_ID -e IOS_BUNDLE_ID -e IOS_EXPORT_METHOD \
               -e ANDROID_UPLOAD_DESTINATION -e IOS_UPLOAD_DESTINATION -e WEB_UPLOAD_DESTINATION \
@@ -112,7 +156,7 @@ def uploadArtifact(String platform) {
     def destination = params["${platform.toUpperCase()}_UPLOAD_DESTINATION"] ?: 'none'
     if (destination == 'none') { return }
     // Install trusted central dependencies before binding publishing credentials.
-    if (platform == 'android' && destination == 'google') {
+    if (platform == 'android') {
         sh '''
             set -eu
             # Controller topology differs between hosts. A containerised Jenkins
@@ -128,17 +172,17 @@ def uploadArtifact(String platform) {
             }
             ci_docker_run \
               -v flutter-upload-gems:/opt/upload-gems \
-              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile" \
-              -w "$CI_ROOT/upload" "$FLUTTER_IMAGE" sh -c 'bundle check || bundle install'
+              -e BUNDLE_FROZEN=true -e BUNDLE_PATH=/opt/upload-gems -e BUNDLE_GEMFILE="$CI_ROOT/scripts/upload/Gemfile" \
+              -w "$CI_ROOT/scripts/upload" "$FLUTTER_IMAGE" sh -c 'bundle check || bundle install'
         '''
     }
-    if (platform == 'ios' && destination == 'appstore') {
+    if (platform == 'ios') {
         sh '''
             set -eu
-            export BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile"
+            export BUNDLE_GEMFILE="$CI_ROOT/scripts/upload/Gemfile"
             export BUNDLE_PATH="$CI_ROOT/.upload-gems"
             export BUNDLE_FROZEN=true
-            cd "$CI_ROOT/upload"
+            cd "$CI_ROOT/scripts/upload"
             bundle check || bundle install
         '''
     }
@@ -154,7 +198,7 @@ def uploadArtifact(String platform) {
                 sh '''
                     set +x
                     set -eu
-                    export BUNDLE_GEMFILE="$CI_ROOT/upload/Gemfile"
+                    export BUNDLE_GEMFILE="$CI_ROOT/scripts/upload/Gemfile"
                     export BUNDLE_PATH="$CI_ROOT/.upload-gems"
                     export BUNDLE_FROZEN=true
                     python3 "$CI_ROOT/scripts/upload.py" upload --project "$WORKSPACE/app" --platform ios
@@ -283,7 +327,7 @@ pipeline {
                         }
                         sh '''
                             set -eu
-                            export BUNDLE_GEMFILE="$CI_ROOT/Gemfile"
+                            export BUNDLE_GEMFILE="$CI_ROOT/scripts/ios/Gemfile"
                             bundle check || bundle install
                             python3 "$CI_ROOT/scripts/build.py" validate --project "$WORKSPACE/app"
                             python3 "$CI_ROOT/scripts/build.py" quality --project "$WORKSPACE/app"
@@ -296,7 +340,7 @@ pipeline {
                             def command = '''
                                 set +x
                                 set -eu
-                                export BUNDLE_GEMFILE="$CI_ROOT/Gemfile"
+                                export BUNDLE_GEMFILE="$CI_ROOT/scripts/ios/Gemfile"
                                 python3 "$CI_ROOT/scripts/build.py" build --project "$WORKSPACE/app" --platform ios
                             '''
                             if (params.BUILD_MODE == 'release' && params.IOS_RELEASE_SIGNING == 'jenkins') {

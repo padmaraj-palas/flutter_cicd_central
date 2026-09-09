@@ -119,7 +119,7 @@ def prepare_android(project, name):
     marker = "// CENTRAL_FLUTTER_CI_IDENTITY"
     if marker in content:
         raise ValueError("Checkout already has central build edits; use a fresh checkout.")
-    script = (CENTRAL / "scripts/android.gradle").as_posix()
+    script = (CENTRAL / "scripts/android/override.gradle").as_posix()
     if any(char in script for char in ('"', '$', '\n', '\r')):
         raise ValueError("Central repository path contains unsupported Gradle interpolation characters.")
     statement = f'apply(from = "{script}")' if gradle.suffix == ".kts" else f'apply from: "{script}"'

@@ -146,10 +146,13 @@ def validate(data):
     fields(data, ("schema_version", "confirmed", "project_id", "job_name", "jenkins", "ci", "parameters"), "answers")
     if type(data["schema_version"]) is not int or data["schema_version"] != 1 or data["confirmed"] is not True:
         raise ValueError("Confirm the collected settings before use: schema_version=1, confirmed=true.")
-    for name in ("project_id", "job_name"):
+    for name, pattern, characters in (
+        ("project_id", r"[A-Za-z][A-Za-z0-9_.-]{0,79}", "letters, digits, dots, underscores or hyphens"),
+        ("job_name", r"[A-Za-z][A-Za-z0-9 ._-]{0,79}", "letters, digits, spaces, dots, underscores or hyphens"),
+    ):
         literal(data[name], name)
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,79}", data[name]):
-            raise ValueError(f"{name}: use a simple name of at most 80 letters, digits, dots, underscores or hyphens.")
+        if not re.fullmatch(pattern, data[name]):
+            raise ValueError(f"{name}: start with a letter and use at most 80 {characters}.")
     fields(data["jenkins"], ("url", "poll_schedule"), "jenkins")
     literal(data["jenkins"]["url"], "jenkins.url")
     url = urllib.parse.urlsplit(data["jenkins"]["url"])

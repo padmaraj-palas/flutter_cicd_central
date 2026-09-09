@@ -89,7 +89,7 @@ class LinuxUploadWrapperTests(unittest.TestCase):
                     expected += ["--project", "/workspace/Flutter CI/app", "--platform", platform]
                 self.assertEqual(args[args.index("python3"):], expected)
                 self.assertEqual(args[args.index("-w") + 1], "/workspace/Flutter CI/ci-platform")
-                self.assertIn("BUNDLE_GEMFILE=/workspace/Flutter CI/ci-platform/upload/Gemfile", args)
+                self.assertIn("BUNDLE_GEMFILE=/workspace/Flutter CI/ci-platform/scripts/upload/Gemfile", args)
 
     def test_upload_forwards_credentials_by_environment_name_without_tracing_values(self):
         result = self.run_wrapper()

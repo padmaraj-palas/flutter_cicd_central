@@ -4,3 +4,5 @@ __pycache__/
 .bundle/
 vendor/bundle/
 .setup-state/
+
+.upload-gems/

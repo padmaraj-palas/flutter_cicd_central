@@ -1,25 +1,63 @@
-# Central Flutter CI
+# Central Flutter CI/CD
 
-This is the standalone central CI repository. Copy **nothing** into Flutter repositories.
+One central repository builds Flutter apps for Web, Android and iOS. Each regular
+Jenkins Pipeline job owns its app repository/branch, environment, build mode,
+platform, app name, API URL, native IDs, signing and upload settings. Copy a job to
+create another configuration.
 
-Each Jenkins job selects an app repository and branch, environment, build mode, platform, app name, API URL, Android application ID and iOS bundle ID. The pipeline checks out central tooling and the app separately. Only the disposable app checkout is adapted for a build; no changes are committed or pushed to the app.
+App repositories receive no CI files. Jenkins checks out tooling and app source
+separately, adapts only the disposable native checkout, and never commits app changes.
 
-Start with [HOST_SETUP.md](HOST_SETUP.md), then [JENKINS_SETUP.md](JENKINS_SETUP.md). [IOS_SETUP.md](IOS_SETUP.md) covers Mac workers and signing. [AUTOMATION.md](AUTOMATION.md) describes setup helpers.
+## Start here
 
-The original [Flutter CI-CD.pdf](requirements/Flutter%20CI-CD.pdf) and [derived handover](requirements/FLUTTER_CICD_AGENT_HANDOVER.md) are included unchanged. They provide requirements/history; the current zero-app-files request governs this implementation.
+| Guide | What it covers |
+| --- | --- |
+| [Windows/WSL setup](documents/SETUP_WINDOWS_WSL.md) | WSL2, Docker Desktop, Jenkins, build images/caches and optional Mac agent |
+| [Linux setup](documents/SETUP_LINUX.md) | Ubuntu, Docker Engine, Jenkins, build images/caches and optional Mac agent |
+| [macOS setup](documents/SETUP_MACOS.md) | Apple Silicon/Intel, native Jenkins and iOS agent, Docker for Android/Web |
+| [Configuration](documents/CONFIGURATION.md) | Create/copy jobs, all 41 parameters, setup helpers, credentials, signing and automatic uploads |
+| [Operations](documents/OPERATIONS.md) | Architecture, troubleshooting, backups, upgrades, file map, developer checks and dated validation evidence |
 
-This implementation tests, builds and archives Android APK/AAB, Web output and iOS simulator ZIP/IPA. Each Jenkins job can also select automatic Android uploads to Firebase or Google Play, and iOS uploads to Firebase or App Store Connect/TestFlight. All destinations default to none; Web remains archive only. See [UPLOADS.md](UPLOADS.md) for configuration and service prerequisites.
+For a fresh **Apple Silicon Mac**, begin with [Mac setup](documents/SETUP_MACOS.md).
+Jenkins runs on the Mac; Web/Android build in the amd64 Linux image under emulation,
+and iOS builds natively with Xcode. Windows/Linux can build Web/Android and use a
+separate native Mac agent for iOS. Existing Jenkins installations use the
+[existing-controller helper](documents/CONFIGURATION.md#automation).
 
-## Continuing work or configuring a job
+Download the [Jenkins parameter CSV](documents/PARAMETERS.csv) for all 41 parameters, expected values and descriptions.
 
-New agents: read [AGENTS.md](AGENTS.md), then [AGENT_HANDOVER.md](AGENT_HANDOVER.md) for the design, code map, history and pending verification.
+## Build output and uploads
 
-Job configuration: [PARAMETERS.md](PARAMETERS.md) lists every parameter, possible values, examples and signing requirements. Keep it alongside [JENKINS_SETUP.md](JENKINS_SETUP.md) when creating or copying jobs.
+| Platform | Debug | Release | Optional automatic upload |
+| --- | --- | --- | --- |
+| Android | APK | AAB | `none`, `firebase`, `google` |
+| iOS | Unsigned simulator ZIP | Signed IPA | `none`, `firebase`, `appstore` |
+| Web | Web ZIP | Web ZIP | `none` |
 
-## Application compatibility
+Uploads default to `none`. `appstore` uploads to App Store Connect/TestFlight; it does
+not submit to App Review or release publicly. Credentials stay in Jenkins/protected
+host bindings. Job settings contain credential IDs, never secrets.
 
-Standard Flutter Android app modules and iOS Runner projects are supported. Existing Android flavors and shared iOS schemes can be selected by parameters. Dependencies, Android namespace/source package, native plugins and application Dart source are preserved. Custom targets/extensions, multiple Android flavor dimensions and unusual layouts need a reviewed adapter **in this central repository**, never an app-side CI installation.
+`APP_NAME` changes launcher/display/Web metadata. Existing Dart code must consume
+`APP_NAME` and `API_BASE_URL` defines to change in-screen titles or API behavior;
+CI reports hardcoded app incompatibility rather than rewriting business logic.
+Standard Android app modules and iOS Runner projects are supported; unusual native
+layouts need a reviewed central adapter.
 
-APP_NAME controls the Android launcher label, iOS display name and Web document/PWA metadata. An app's own in-screen title or API client changes only if existing code reads the APP_NAME/API_BASE_URL Dart defines. CI cannot replace arbitrary hardcoded Dart business logic without changing the application. Report that limitation rather than patch the app.
+## Repository layout
 
-Create a new job for this central model. Old per-project jobs use a different pipeline. Copy central jobs and edit their saved values. [VALIDATION.md](VALIDATION.md) records executed checks and limits.
+- `Jenkinsfile`: stable Pipeline SCM entrypoint.
+- `scripts/`: build/upload runners; Android, iOS and upload support grouped by purpose.
+- `automation/`: public answers example, Jenkins helpers and fresh-bootstrap asset.
+- `host/`: Docker images/Compose and stable Mac service scripts.
+- `tests/`: all runner, pipeline and setup tests.
+- `documents/`: three host setup guides plus shared configuration and operations guides.
+- `requirements/`: unchanged original [PDF](requirements/Flutter%20CI-CD.pdf) and
+  [derived handover](requirements/FLUTTER_CICD_AGENT_HANDOVER.md), retained as historical requirements.
+- `manifests/` and `FILES.csv`: deliverable and original-requirement hashes.
+
+Contributors: read [AGENTS.md](AGENTS.md) and the
+[development checks](documents/OPERATIONS.md#development). See the
+[migration map](documents/OPERATIONS.md#repository-history) for former document/script
+locations. The [validation record](documents/OPERATIONS.md#validation) distinguishes
+local checks from pending live Jenkins, Android, Mac signing and upload verification.

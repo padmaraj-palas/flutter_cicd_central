@@ -192,6 +192,11 @@ class IOSBuildTests(unittest.TestCase):
         for args, kwargs in calls:
             if args[0] in ("bundle", "flutter"):
                 self.assertFalse(set(bindings).intersection(kwargs["env"]) - {"BUILD_MODE"})
+                self.assertEqual(Path(kwargs["env"]["BUNDLE_GEMFILE"]), REPO / "scripts/ios/Gemfile")
+                self.assertTrue(Path(kwargs["env"]["BUNDLE_GEMFILE"]).is_file())
+            if args[0] == "bundle":
+                self.assertEqual(Path(args[3]), REPO / "scripts/ios/prepare.rb")
+                self.assertTrue(Path(args[3]).is_file())
 
 if __name__ == "__main__":
     unittest.main()

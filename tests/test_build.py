@@ -96,7 +96,7 @@ class BuildTests(unittest.TestCase):
                     shutil.rmtree(self.project / "android")
                 script = self.android(kotlin)
                 runner.prepare_android(self.project, PARAMS["APP_NAME"])
-                self.assertIn("android.gradle", script.read_text())
+                self.assertIn("scripts/android/override.gradle", script.read_text())
                 self.assertIn("apply(from" if kotlin else "apply from:", script.read_text())
                 for manifest in (self.project / "android/app/src").glob("*/AndroidManifest.xml"):
                     app = ET.parse(manifest).getroot().find("application")

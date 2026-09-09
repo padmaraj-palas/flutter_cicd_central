@@ -9,7 +9,7 @@
   },
   "ci": {
     "repository_url": "https://github.com/your-org/flutter-cicd-central.git",
-    "ref": "refs/tags/v1.0.0",
+    "ref": "refs/tags/your-reviewed-fixed-release",
     "script_path": "Jenkinsfile",
     "credentials_id": ""
   },
