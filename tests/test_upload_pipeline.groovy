@@ -55,3 +55,24 @@ int cases = 0
     }
 }
 println "Jenkins upload helper: ${cases} cases passed (Jenkins steps stubbed)."
+
+int archiveCases = 0
+[['android', 'release', 'apk', 'app.apk'],
+ ['android', 'debug', 'aab', 'app.aab'],
+ ['android', 'release', null, 'app.aab'],
+ ['android', 'debug', null, 'app.apk'],
+ ['ios', 'release', 'apk', 'app.ipa']].each { platform, mode, artifactType, expected ->
+    def archived = []
+    def parameters = [ENVIRONMENT: 'staging', BUILD_MODE: mode, ANDROID_ARTIFACT_TYPE: artifactType]
+    def binding = new Binding([params: parameters])
+    binding.setVariable('fileExists', { path -> true })
+    binding.setVariable('readFile', { path -> "staging ${mode} ${platform}\n" })
+    binding.setVariable('archiveArtifacts', { Map options ->
+        assert options.allowEmptyArchive == false
+        archived << options.artifacts.tokenize('/').last()
+    })
+    new GroovyShell(binding).parse(source).archiveOutput(platform)
+    assert archived == [expected]
+    archiveCases++
+}
+println "Jenkins artifact archives: ${archiveCases} cases passed (Jenkins steps stubbed)."

@@ -13,8 +13,16 @@ DEFAULTS = {key: choices[0] for key, choices in CHOICES.items()}
 DEFAULTS.update(dict.fromkeys((*CREDENTIALS, "FIREBASE_ANDROID_APP_ID", "FIREBASE_IOS_APP_ID", "FIREBASE_GROUPS", "UPLOAD_RELEASE_NOTES"), ""))
 
 
+def android_artifact_type(values):
+    artifact = values.get("ANDROID_ARTIFACT_TYPE", "apk" if values.get("BUILD_MODE") == "debug" else "aab")
+    if artifact not in ("apk", "aab"):
+        raise ValueError("ANDROID_ARTIFACT_TYPE must be apk or aab.")
+    return artifact
+
+
 def validate(values):
     result = {**DEFAULTS, **values}
+    result["ANDROID_ARTIFACT_TYPE"] = android_artifact_type(values)
     for key in DEFAULTS:
         value = result[key]
         if not isinstance(value, str) or value != value.strip() or any(ord(c) < 32 or ord(c) == 127 for c in value):
@@ -55,7 +63,7 @@ def validate(values):
             require(f"FIREBASE_{platform.upper()}_APP_ID")
         if platform == "android" and destination == "google":
             require("GOOGLE_PLAY_CREDENTIALS_ID")
-            if result.get("BUILD_MODE") != "release":
+            if result.get("BUILD_MODE") != "release" or result["ANDROID_ARTIFACT_TYPE"] != "aab":
                 raise ValueError("Google Play upload requires an Android release AAB.")
         if platform == "ios":
             if result.get("BUILD_MODE") != "release":

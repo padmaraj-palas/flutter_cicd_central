@@ -66,7 +66,7 @@ def linuxRun(String action, String platform = '') {
               -v flutter-ndk-cache:/opt/android-sdk/ndk \
               -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE \
               -e APP_NAME -e API_BASE_URL -e ANDROID_APPLICATION_ID -e IOS_BUNDLE_ID \
-              -e ANDROID_FLAVOR -e IOS_SCHEME -e ANDROID_RELEASE_SIGNING \
+              -e ANDROID_FLAVOR -e IOS_SCHEME -e ANDROID_RELEASE_SIGNING -e ANDROID_ARTIFACT_TYPE \
               -e ANDROID_KEYSTORE_FILE -e ANDROID_STORE_PASSWORD -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
               -w "$WORKSPACE" "$FLUTTER_IMAGE" \
               python3 "$CI_ROOT/scripts/build.py" "$@"
@@ -80,7 +80,7 @@ def archiveOutput(String platform) {
         error("Missing success marker for ${platform}")
     }
     def artifact = platform == 'web' ? 'app.zip' :
-        (platform == 'android' ? (params.BUILD_MODE == 'debug' ? 'app.apk' : 'app.aab') :
+        (platform == 'android' ? "app.${params.ANDROID_ARTIFACT_TYPE ?: (params.BUILD_MODE == 'debug' ? 'apk' : 'aab')}" :
         (params.BUILD_MODE == 'debug' ? 'app.zip' : 'app.ipa'))
     archiveArtifacts artifacts: "${output}/${artifact}", fingerprint: true, allowEmptyArchive: false
 }
@@ -90,7 +90,7 @@ def uploadEnvironment() {
     def keys = ['ANDROID_UPLOAD_DESTINATION', 'IOS_UPLOAD_DESTINATION', 'WEB_UPLOAD_DESTINATION',
                 'FIREBASE_ANDROID_APP_ID', 'FIREBASE_IOS_APP_ID', 'FIREBASE_GROUPS',
                 'FIREBASE_CREDENTIALS_ID', 'GOOGLE_PLAY_CREDENTIALS_ID', 'APPSTORE_API_KEY_CREDENTIALS_ID',
-                'GOOGLE_PLAY_TRACK', 'GOOGLE_PLAY_RELEASE_STATUS', 'UPLOAD_RELEASE_NOTES', 'PLATFORM']
+                'GOOGLE_PLAY_TRACK', 'GOOGLE_PLAY_RELEASE_STATUS', 'UPLOAD_RELEASE_NOTES', 'PLATFORM', 'ANDROID_ARTIFACT_TYPE']
     return keys.collect { key -> "${key}=${params[key] ?: ''}" }
 }
 
@@ -142,7 +142,7 @@ def linuxUploadRun(String action, String platform = '') {
               -e PYTHONDONTWRITEBYTECODE=1 -e ENVIRONMENT -e BUILD_MODE -e PLATFORM \
               -e ANDROID_APPLICATION_ID -e IOS_BUNDLE_ID -e IOS_EXPORT_METHOD \
               -e ANDROID_UPLOAD_DESTINATION -e IOS_UPLOAD_DESTINATION -e WEB_UPLOAD_DESTINATION \
-              -e FIREBASE_ANDROID_APP_ID -e FIREBASE_IOS_APP_ID -e FIREBASE_GROUPS \
+              -e ANDROID_ARTIFACT_TYPE -e FIREBASE_ANDROID_APP_ID -e FIREBASE_IOS_APP_ID -e FIREBASE_GROUPS \
               -e FIREBASE_CREDENTIALS_ID -e GOOGLE_PLAY_CREDENTIALS_ID -e APPSTORE_API_KEY_CREDENTIALS_ID \
               -e GOOGLE_PLAY_TRACK -e GOOGLE_PLAY_RELEASE_STATUS -e UPLOAD_RELEASE_NOTES \
               -e FIREBASE_CREDENTIALS_FILE -e GOOGLE_PLAY_CREDENTIALS_FILE \
@@ -220,6 +220,7 @@ pipeline {
     environment {
         ENVIRONMENT = "${params.ENVIRONMENT}"
         BUILD_MODE = "${params.BUILD_MODE}"
+        ANDROID_ARTIFACT_TYPE = "${params.ANDROID_ARTIFACT_TYPE ?: (params.BUILD_MODE == 'debug' ? 'apk' : 'aab')}"
         APP_NAME = "${params.APP_NAME}"
         API_BASE_URL = "${params.API_BASE_URL}"
         ANDROID_APPLICATION_ID = "${params.ANDROID_APPLICATION_ID}"

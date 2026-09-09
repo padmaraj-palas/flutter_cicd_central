@@ -50,6 +50,24 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(root.findtext(".//hudson.triggers.SCMTrigger/spec"), "H/5 * * * *")
         self.assertNotIn("environment_file", ET.tostring(root, encoding="unicode"))
 
+    def test_android_artifact_parameter_and_legacy_defaults(self):
+        for mode, default in (("debug", "apk"), ("release", "aab")):
+            for selected in (None, "apk", "aab"):
+                with self.subTest(mode=mode, selected=selected):
+                    data = copy.deepcopy(self.data)
+                    data["parameters"]["BUILD_MODE"] = mode
+                    data["parameters"].pop("ANDROID_ARTIFACT_TYPE", None)
+                    if selected:
+                        data["parameters"]["ANDROID_ARTIFACT_TYPE"] = selected
+                    setup.validate(data)
+                    root = ET.fromstring(setup.job_xml(data))
+                    node = next(n for n in root.findall(".//hudson.model.ChoiceParameterDefinition") if n.findtext("name") == "ANDROID_ARTIFACT_TYPE")
+                    self.assertEqual(node.findtext("choices/a/string"), selected or default)
+        bad = copy.deepcopy(self.data)
+        bad["parameters"]["ANDROID_ARTIFACT_TYPE"] = "ipa"
+        with self.assertRaises(ValueError):
+            setup.validate(bad)
+
     def test_ci_commit_is_pinned_and_named_branch_tracks_branch(self):
         for selected in ("a" * 40, "b" * 64, "refs/tags/v1.0.0", "refs/heads/main"):
             changed = copy.deepcopy(self.data)
@@ -145,7 +163,7 @@ class SetupTests(unittest.TestCase):
         setup.validate(self.data)
 
     def test_no_implicit_settings_and_no_secret_fields(self):
-        for key in set(setup.PARAMETERS) - set(setup.upload_settings.DEFAULTS):
+        for key in set(setup.PARAMETERS) - set(setup.upload_settings.DEFAULTS) - {"ANDROID_ARTIFACT_TYPE"}:
             with self.subTest(missing=key):
                 changed = copy.deepcopy(self.data)
                 del changed["parameters"][key]
@@ -189,7 +207,7 @@ class SetupTests(unittest.TestCase):
 
     def test_android_google_upload_requires_release_and_credentials(self):
         p = self.data["parameters"]
-        p.update(ANDROID_UPLOAD_DESTINATION="google")
+        p.update(ANDROID_UPLOAD_DESTINATION="google", ANDROID_ARTIFACT_TYPE="aab")
         with self.assertRaises(ValueError):
             setup.validate(self.data)
         p.update(BUILD_MODE="release")

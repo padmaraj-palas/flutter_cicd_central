@@ -15,7 +15,7 @@ separately, adapts only the disposable native checkout, and never commits app ch
 | [Windows/WSL setup](documents/SETUP_WINDOWS_WSL.md) | WSL2, Docker Desktop, Jenkins, build images/caches and optional Mac agent |
 | [Linux setup](documents/SETUP_LINUX.md) | Ubuntu, Docker Engine, Jenkins, build images/caches and optional Mac agent |
 | [macOS setup](documents/SETUP_MACOS.md) | Apple Silicon/Intel, native Jenkins and iOS agent, Docker for Android/Web |
-| [Configuration](documents/CONFIGURATION.md) | Create/copy jobs, all 41 parameters, setup helpers, credentials, signing and automatic uploads |
+| [Configuration](documents/CONFIGURATION.md) | Create/copy jobs, all 42 parameters, setup helpers, credentials, signing and automatic uploads |
 | [Operations](documents/OPERATIONS.md) | Architecture, troubleshooting, backups, upgrades, file map, developer checks and dated validation evidence |
 
 For a fresh **Apple Silicon Mac**, begin with [Mac setup](documents/SETUP_MACOS.md).
@@ -24,17 +24,17 @@ and iOS builds natively with Xcode. Windows/Linux can build Web/Android and use 
 separate native Mac agent for iOS. Existing Jenkins installations use the
 [existing-controller helper](documents/CONFIGURATION.md#automation).
 
-Download the [Jenkins parameter CSV](documents/PARAMETERS.csv) for all 41 parameters, expected values and descriptions.
+Download the [Jenkins parameter CSV](documents/PARAMETERS.csv) for all 42 parameters, expected values and descriptions.
 
 ## Build output and uploads
 
 | Platform | Debug | Release | Optional automatic upload |
 | --- | --- | --- | --- |
-| Android | APK | AAB | `none`, `firebase`, `google` |
+| Android | APK or AAB (default APK) | APK or AAB (default AAB) | `none`, `firebase`, `google` |
 | iOS | Unsigned simulator ZIP | Signed IPA | `none`, `firebase`, `appstore` |
 | Web | Web ZIP | Web ZIP | `none` |
 
-Uploads default to `none`. `appstore` uploads to App Store Connect/TestFlight; it does
+Select Android format with `ANDROID_ARTIFACT_TYPE=apk` or `aab`. Uploads default to `none`. `appstore` uploads to App Store Connect/TestFlight; it does
 not submit to App Review or release publicly. Credentials stay in Jenkins/protected
 host bindings. Job settings contain credential IDs, never secrets.
 

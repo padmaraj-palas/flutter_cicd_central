@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 spec = importlib.util.spec_from_file_location("central_build", Path(__file__).resolve().parents[1] / "scripts/build.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
@@ -170,7 +171,7 @@ class BuildTests(unittest.TestCase):
 
     def test_android_release_uses_existing_flavor_and_verifies_new_bundle(self):
         self.android()
-        values = dict(self.values, BUILD_MODE="release", ANDROID_FLAVOR="staging")
+        values = dict(self.values, BUILD_MODE="release", ANDROID_FLAVOR="staging", ANDROID_ARTIFACT_TYPE="aab")
         calls = []
         def fake_run(args, project, **kwargs):
             calls.append(args)
@@ -183,6 +184,43 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(calls[-1][calls[-1].index("--flavor") + 1], "staging")
         self.assertTrue((self.project / "build/ci/staging/release/android/app.aab").is_file())
         self.assertFalse((self.project / "ci").exists())
+
+    def check_selected_android_artifact(self, mode, artifact_type):
+        self.android()
+        values = dict(self.values, BUILD_MODE=mode, ANDROID_ARTIFACT_TYPE=artifact_type, ANDROID_FLAVOR="staging")
+        calls = []
+        def fake_run(args, project, **kwargs):
+            calls.append(args)
+            if args[:2] == ["flutter", "build"]:
+                target = project / ("build/app/outputs/flutter-apk/app-staging-release.apk" if artifact_type == "apk" else "build/app/outputs/bundle/stagingDebug/app-staging-debug.aab")
+                target.parent.mkdir(parents=True)
+                target.write_bytes(b"fixture")
+            return subprocess.CompletedProcess(args, 0)
+        with patch.dict(os.environ, {"ANDROID_RELEASE_SIGNING": "project"}), patch.object(runner, "run", side_effect=fake_run), patch.object(runner, "verify_android") as verify:
+            runner.build(self.project, "android", values)
+        builds = [c for c in calls if c[:2] == ["flutter", "build"]]
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(builds[0][2], "apk" if artifact_type == "apk" else "appbundle")
+        self.assertIn("--" + mode, builds[0])
+        self.assertIn("--dart-define=API_BASE_URL=" + PARAMS["API_BASE_URL"], builds[0])
+        self.assertEqual(builds[0][builds[0].index("--flavor") + 1], "staging")
+        verify.assert_called_once()
+        self.assertEqual(verify.call_args.args[0].suffix, "." + artifact_type)
+        output = self.project / f"build/ci/staging/{mode}/android"
+        self.assertEqual({p.name for p in output.iterdir()}, {"app." + artifact_type, "SUCCESS"})
+
+    def test_release_apk_selection(self):
+        self.check_selected_android_artifact("release", "apk")
+
+    def test_debug_aab_selection(self):
+        self.check_selected_android_artifact("debug", "aab")
+
+    def test_artifact_type_defaults_and_invalid_values(self):
+        self.assertEqual(runner.settings(PARAMS)["ANDROID_ARTIFACT_TYPE"], "apk")
+        self.assertEqual(runner.settings({**PARAMS, "BUILD_MODE": "release"})["ANDROID_ARTIFACT_TYPE"], "aab")
+        for value in ("", "APK", "ipa", "apk,aab", "../apk"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                runner.settings({**PARAMS, "ANDROID_ARTIFACT_TYPE": value})
 
     def test_release_requires_explicit_signing_and_all_bindings_before_edits(self):
         values = dict(self.values, BUILD_MODE="release")

@@ -532,7 +532,7 @@ mismatched profiles are rejected.
 
 #### `Google Play upload requires an Android release AAB`
 
-Play accepts only `BUILD_MODE=release` output. Debug APKs are rejected.
+Play requires `BUILD_MODE=release` and `ANDROID_ARTIFACT_TYPE=aab`. APKs and debug builds are rejected.
 
 #### `iOS uploads require a signed release IPA; simulator builds cannot be uploaded`
 
@@ -701,7 +701,7 @@ checks language syntax; neither it nor stub tests proves Jenkins Declarative,
 Android/iOS compilation/signing or upload integration.
 
 For configuration/behavior changes, check Jenkinsfile, setup validator/renderer,
-shared upload settings, native runners and public example together. Keep the 41
+shared upload settings, native runners and public example together. Keep the 42
 parameter reference aligned with `automation/scripts/setup.py` and runtime validation.
 For documentation/path changes, check local links and anchors, parameter coverage,
 script/bundle references and manifests. Run real builds only when relevant to the
@@ -1102,3 +1102,45 @@ No real Firebase upload or native Mac bundle installation was performed. These
 checks do not establish Firebase authentication, service acceptance, tester
 installation or Jenkins Declarative integration. No live Jenkins jobs, credentials,
 app repositories or shared dependency caches were changed.
+
+### Configurable Android APK/AAB output: 2026-09-09
+
+Added the per-job `ANDROID_ARTIFACT_TYPE` choice (`apk` or `aab`) at the user's
+request. Build, identity verification, archive and upload use the selected format.
+The existing build mode and signing configuration apply to that single artifact.
+Missing settings preserve APK for debug and AAB for release. Google Play validation
+requires release mode plus AAB. No automatic second artifact or diagnostic-output
+change is included.
+
+The pasted Jenkins log for central revision `87d282c` shows a successful Android
+release AAB build/archive and Fastlane installation, followed by a suppressed
+Firebase upload failure. The user confirmed that Google Play linkage is not set up
+and selected release APK distribution. An APK avoids the AAB linkage prerequisite;
+the original log alone does not establish whether another service error occurred.
+
+Verification:
+- Full Windows Python suite: 77 tests ran, 75 passed and two platform-specific cases
+  skipped. Covers selection, old-job defaults, setup rendering, invalid values,
+  correct upload file selection and Google Play restrictions.
+- Complete Jenkinsfile parsing and 17 isolated Groovy cases passed: 12 existing
+  upload-helper cases and five single-artifact archive cases. Jenkins steps stubbed.
+- A real `ANDROID_ARTIFACT_TYPE=apk`, release-mode build completed from disposable
+  app revision `300a69ddb70f1e76a797a556f6963840989147a9` using a generated test
+  keystore through the existing Jenkins signing adapter. The central runner verified
+  package/name; Android apksigner verified the APK signature. Its certificate SHA-256
+  matched the generated keystore:
+  `7594bd950f20752cf94660c9194ea3db987bd22c973d433d2fe9f617aaf6c0be`.
+  Output contained only app.apk (44.1 MB reported by Flutter) and SUCCESS.
+  Gradle assembleRelease took 71.6 seconds. Shared caches were mounted read-only
+  and copied inside the disposable container. No real publishing credential was used.
+
+No live Jenkins settings, Firebase upload or app repository changes were made by
+this validation. To use the parameter in an existing job, publish the central change
+and save `ANDROID_ARTIFACT_TYPE=apk` on that job while retaining release mode and its
+existing signing/upload settings.
+
+Parameter reference completion: after the user closed the locked CSV, added
+ANDROID_ARTIFACT_TYPE to documents/PARAMETERS.csv and verified all 42 parameters,
+choice values, example and Markdown coverage. Refreshed FILES.csv and verified
+repository, host and unchanged original-requirement hashes. No runtime changes
+or repeated platform builds were needed for this documentation completion.

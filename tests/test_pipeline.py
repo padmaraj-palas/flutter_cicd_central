@@ -43,6 +43,7 @@ class LinuxWrapperTests(unittest.TestCase):
                 result = self.run_wrapper(action, platform)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 args = result.stdout.splitlines()
+                self.assertIn("ANDROID_ARTIFACT_TYPE", args)
                 expected = ["python3", "/workspace/Flutter CI/ci-platform/scripts/build.py",
                             action, "--project", "/workspace/Flutter CI/app"]
                 if platform:
@@ -97,7 +98,7 @@ class LinuxUploadWrapperTests(unittest.TestCase):
         args = result.stdout.splitlines()
         forwarded = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == "-e"]
         for name in ("FIREBASE_CREDENTIALS_FILE", "GOOGLE_PLAY_CREDENTIALS_FILE",
-                     "UPLOAD_RELEASE_NOTES", "PLATFORM", "IOS_EXPORT_METHOD",
+                     "UPLOAD_RELEASE_NOTES", "PLATFORM", "IOS_EXPORT_METHOD", "ANDROID_ARTIFACT_TYPE",
                      "ANDROID_UPLOAD_DESTINATION", "IOS_UPLOAD_DESTINATION", "WEB_UPLOAD_DESTINATION"):
             self.assertIn(name, forwarded)
         self.assertNotIn("secretFiles", result.stdout + result.stderr)

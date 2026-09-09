@@ -12,6 +12,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from urllib.parse import urlsplit
+from upload_settings import android_artifact_type
 
 CENTRAL = Path(__file__).resolve().parents[1]
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
@@ -45,6 +46,7 @@ def settings(environ=None):
         if (not value and key == "IOS_SCHEME") or (value and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", value)):
             raise ValueError(f"{key} must be a simple existing native flavor/scheme name.")
         values[key] = value
+    values["ANDROID_ARTIFACT_TYPE"] = android_artifact_type(env)
     return values
 
 
@@ -298,10 +300,11 @@ def build(project, platform, values):
         prepare_android(project, values["APP_NAME"])
         clean(project, "build/app/outputs")
         mode = values["BUILD_MODE"]
-        target = "apk" if mode == "debug" else "appbundle"
+        artifact_type = android_artifact_type(values)
+        target = "apk" if artifact_type == "apk" else "appbundle"
         flavor = ["--flavor", values["ANDROID_FLAVOR"]] if values["ANDROID_FLAVOR"] else []
         run(["flutter", "build", target, f"--{mode}", "--no-pub", *flavor, *defines], project)
-        pattern = "build/app/outputs/flutter-apk/*.apk" if mode == "debug" else "build/app/outputs/bundle/**/*.aab"
+        pattern = "build/app/outputs/flutter-apk/*.apk" if artifact_type == "apk" else "build/app/outputs/bundle/**/*.aab"
         candidates = list(project.glob(pattern))
         if len(candidates) != 1 or not candidates[0].stat().st_size:
             raise ValueError("Expected exactly one newly built Android artifact.")
@@ -309,7 +312,7 @@ def build(project, platform, values):
         if not artifact.resolve().is_relative_to(project):
             raise ValueError("Android artifact escapes disposable checkout.")
         verify_android(artifact, values, project)
-        shutil.copy2(artifact, output / ("app.apk" if mode == "debug" else "app.aab"))
+        shutil.copy2(artifact, output / f"app.{artifact_type}")
     (output / "SUCCESS").write_text(f"{values['ENVIRONMENT']} {values['BUILD_MODE']} {platform}\n", encoding="utf-8")
 
 

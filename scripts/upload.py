@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from upload_settings import validate
+from upload_settings import android_artifact_type, validate
 
 CENTRAL = Path(__file__).resolve().parents[1]
 # Explicit allowlist excludes signing secrets and ambient service credentials/config.
@@ -25,7 +25,7 @@ def artifact_path(project, values, platform):
     if environment not in ("testing", "staging", "production") or mode not in ("debug", "release"):
         raise ValueError("Invalid upload environment or build mode.")
     folder = root / "build" / "ci" / environment / mode / platform
-    suffix = "aab" if platform == "android" and mode == "release" else "apk" if platform == "android" else "ipa"
+    suffix = android_artifact_type(values) if platform == "android" else "ipa"
     artifact = folder / f"app.{suffix}"
     marker = folder / "SUCCESS"
     for path in (artifact, marker):

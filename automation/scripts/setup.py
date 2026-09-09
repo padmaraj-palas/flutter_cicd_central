@@ -22,6 +22,7 @@ import upload_settings
 CHOICES = {
     "ENVIRONMENT": ("testing", "staging", "production"),
     "BUILD_MODE": ("debug", "release"),
+    "ANDROID_ARTIFACT_TYPE": ("apk", "aab"),
     "PLATFORM": ("android", "web", "ios", "all"),
     "IOS_RELEASE_SIGNING": ("jenkins", "existing-keychain"),
     "ANDROID_RELEASE_SIGNING": ("jenkins", "project"),
@@ -32,7 +33,7 @@ CHOICES = {
 CHOICES.update(upload_settings.CHOICES)
 PARAMETERS = (
     "APP_REPOSITORY_URL", "APP_BRANCH", "APP_CREDENTIALS_ID",
-    "ENVIRONMENT", "BUILD_MODE", "PLATFORM", "APP_NAME", "API_BASE_URL",
+    "ENVIRONMENT", "BUILD_MODE", "PLATFORM", "ANDROID_ARTIFACT_TYPE", "APP_NAME", "API_BASE_URL",
     "ANDROID_APPLICATION_ID", "IOS_BUNDLE_ID", "ANDROID_FLAVOR", "IOS_SCHEME",
     "LINUX_AGENT_LABEL", "MACOS_AGENT_LABEL", "FLUTTER_IMAGE",
     "ANDROID_RELEASE_SIGNING", "ANDROID_KEYSTORE_CREDENTIAL_ID",
@@ -49,6 +50,7 @@ CREDENTIALS = ("APP_CREDENTIALS_ID", "IOS_P12_CREDENTIAL_ID",
 
 
 UPLOAD_DESCRIPTIONS = {
+    "ANDROID_ARTIFACT_TYPE": "Android output: apk or aab. Existing jobs default to apk for debug and aab for release. Google Play requires a release AAB.",
     "ANDROID_UPLOAD_DESTINATION": "none archives only; firebase distributes to Firebase; google uploads a release AAB to Google Play.",
     "IOS_UPLOAD_DESTINATION": "none archives only; firebase distributes a signed IPA; appstore uploads to App Store Connect/TestFlight without submitting for review.",
     "WEB_UPLOAD_DESTINATION": "none archives only; web deployment is not yet available.",
@@ -174,6 +176,7 @@ def validate(data):
     p = data["parameters"]
     # Existing answer files remain build-only until upload settings are supplied.
     if isinstance(p, dict):
+        p.setdefault("ANDROID_ARTIFACT_TYPE", upload_settings.android_artifact_type(p))
         for key, value in upload_settings.DEFAULTS.items():
             p.setdefault(key, value)
     fields(p, PARAMETERS, "parameters")

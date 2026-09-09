@@ -20,6 +20,7 @@
     "ENVIRONMENT": "staging",
     "BUILD_MODE": "debug",
     "PLATFORM": "android",
+    "ANDROID_ARTIFACT_TYPE": "apk",
     "APP_NAME": "Your App Staging",
     "API_BASE_URL": "https://staging-api.example.com",
     "ANDROID_APPLICATION_ID": "com.example.yourapp.staging",

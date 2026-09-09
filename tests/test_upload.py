@@ -26,7 +26,8 @@ class UploadTests(unittest.TestCase):
         folder = self.root / "build/ci/staging" / mode / platform
         folder.mkdir(parents=True)
         (folder / "SUCCESS").write_text(f"staging {mode} {platform}\n")
-        path = folder / ("app.ipa" if platform == "ios" else "app.aab" if mode == "release" else "app.apk")
+        suffix = "ipa" if platform == "ios" else self.env.get("ANDROID_ARTIFACT_TYPE", "aab" if mode == "release" else "apk")
+        path = folder / f"app.{suffix}"
         path.write_bytes(b"artifact")
         return path
 
@@ -76,6 +77,25 @@ class UploadTests(unittest.TestCase):
                 self.assertEqual(child["UPLOAD_RELEASE_NOTES"], "")
                 self.assertEqual(child["BUNDLE_PATH"], "/opt/upload-gems")
                 self.assertFalse(run.call_args.kwargs["cwd"].exists())
+
+    def test_firebase_release_uploads_selected_apk(self):
+        self.env.update(ANDROID_UPLOAD_DESTINATION="firebase", ANDROID_ARTIFACT_TYPE="apk")
+        apk = self.artifact()
+        (apk.parent / "app.aab").write_bytes(b"unselected artifact")
+        with patch.object(upload.subprocess, "run") as run:
+            upload.upload(str(self.root), "android", self.env)
+        self.assertEqual(run.call_args.kwargs["env"]["CI_UPLOAD_ARTIFACT"], str(apk))
+        apk.unlink()
+        with patch.object(upload.subprocess, "run") as run, self.assertRaises(ValueError):
+            upload.upload(str(self.root), "android", self.env)
+        run.assert_not_called()
+
+    def test_google_requires_aab_and_artifact_type_is_validated(self):
+        with self.assertRaisesRegex(ValueError, "release AAB"):
+            validate({**self.env, "ANDROID_UPLOAD_DESTINATION": "google", "ANDROID_ARTIFACT_TYPE": "apk"})
+        for value in ("", "APK", "ipa", "apk,aab"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "ANDROID_ARTIFACT_TYPE"):
+                validate({**self.env, "ANDROID_ARTIFACT_TYPE": value})
 
     def test_firebase_failure_is_sanitized(self):
         self.env["ANDROID_UPLOAD_DESTINATION"] = "firebase"

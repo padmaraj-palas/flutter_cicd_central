@@ -1,6 +1,6 @@
 # Job configuration, signing and uploads
 
-Use this guide after host setup for [Windows/WSL](SETUP_WINDOWS_WSL.md), [Linux](SETUP_LINUX.md) or [macOS](SETUP_MACOS.md). It is the single reference for regular Jenkins Pipeline jobs, their 41 public parameters, automated job management, signing and automatic uploads. [Operations](OPERATIONS.md) covers troubleshooting and validation evidence.
+Use this guide after host setup for [Windows/WSL](SETUP_WINDOWS_WSL.md), [Linux](SETUP_LINUX.md) or [macOS](SETUP_MACOS.md). It is the single reference for regular Jenkins Pipeline jobs, their 42 public parameters, automated job management, signing and automatic uploads. [Operations](OPERATIONS.md) covers troubleshooting and validation evidence.
 
 - [Create or copy a job](#create-job)
 - [Configure a job with answers and helpers](#automation)
@@ -53,7 +53,7 @@ Copy only when creating a new answers file; preserve an existing job's answers. 
 
 The historical `refs/tags/v1.0.0` failed validation with `CI_PLATFORM: parameter not set`; do not use it for a new setup. Replace any older template ref with a reviewed published revision containing the fixes. See [validation history](OPERATIONS.md).
 
-Every original build/signing key must remain present, even if its value is explicitly empty or the selected platform does not use it. Only upload fields have backward-compatible omission defaults. All supplied choices must be valid. Unknown or duplicate JSON keys are rejected. See [setup-only fields](#setup-fields) and the parameter tables for validation rules.
+Every original build/signing key must remain present, even if its value is explicitly empty or the selected platform does not use it. Upload fields and ANDROID_ARTIFACT_TYPE have backward-compatible omission defaults. All supplied choices must be valid. Unknown or duplicate JSON keys are rejected. See [setup-only fields](#setup-fields) and the parameter tables for validation rules.
 
 Validate and render an inspectable job definition without contacting Jenkins:
 
@@ -62,7 +62,7 @@ python3 automation/scripts/setup.py validate --config ~/ci/setup/answers.json
 python3 automation/scripts/setup.py render-job --config ~/ci/setup/answers.json --output ~/ci/setup/job.xml
 ```
 
-`render-job` creates a new XML file with restrictive permissions and refuses to overwrite an existing file. Choose a new output filename when rendering again. Inspect its central SCM, 41 saved parameters and polling configuration; rendered jobs retain the latest 20 builds and their artifacts.
+`render-job` creates a new XML file with restrictive permissions and refuses to overwrite an existing file. Choose a new output filename when rendering again. Inspect its central SCM, 42 saved parameters and polling configuration; rendered jobs retain the latest 20 builds and their artifacts.
 
 For an existing controller, create an API token at **your username > Security > API Token**. Supply it through the protected process environment; do not store the token in answers or command history. This Bash example reads it without echoing:
 
@@ -157,13 +157,13 @@ Signing credentials prove the build's identity; upload credentials authorize a s
 <a id="parameters"></a>
 ## Parameter rules and defaults
 
-Download [PARAMETERS.csv](PARAMETERS.csv) for all 41 Jenkins job parameters, expected values, defaults, examples, descriptions and conditional requirements. Blank CSV defaults mean an empty string; non-upload parameters have no implicit pipeline default. Examples illustrate individual fields and must be adapted together for the selected job; they are not a ready-to-import configuration. The CSV contains credential IDs only and excludes setup-only fields and runtime secret bindings.
+Download [PARAMETERS.csv](PARAMETERS.csv) for all 42 Jenkins job parameters, expected values, defaults, examples, descriptions and conditional requirements. Blank CSV defaults mean an empty string; original build/signing parameters have no implicit pipeline default; omitted ANDROID_ARTIFACT_TYPE uses apk for debug and aab for release. Examples illustrate individual fields and must be adapted together for the selected job; they are not a ready-to-import configuration. The CSV contains credential IDs only and excludes setup-only fields and runtime secret bindings.
 
-The 41 uppercase names are keys inside the parameters object in [answers.example.json](../automation/answers.example.json). The helper requires every original build/signing key, even when its explicit value is empty or the platform does not use it. Upload fields may be omitted for compatibility: destinations default to none, Google Play track to internal, release status to draft, and upload strings to empty. Every supplied Choice key needs a valid choice even when unused. Examples below are illustrative, not values to copy without confirmation.
+The 42 uppercase names are keys inside the parameters object in [answers.example.json](../automation/answers.example.json). The helper requires every original build/signing key, even when its explicit value is empty or the platform does not use it. ANDROID_ARTIFACT_TYPE may be omitted; it defaults to apk for debug and aab for release. Upload fields may be omitted for compatibility: destinations default to none, Google Play track to internal, release status to draft, and upload strings to empty. Every supplied Choice key needs a valid choice even when unused. Examples below are illustrative, not values to copy without confirmation.
 
 All values are case-sensitive. Strings must be single-line without leading/trailing whitespace. Credential IDs accept letters, digits, underscores, dots and hyphens; they are references to credentials, not secrets.
 
-The non-upload values in the example are starting choices, not Jenkinsfile defaults. For the packaged topology they include `LINUX_AGENT_LABEL=built-in`, `MACOS_AGENT_LABEL=flutter-macos` and `FLUTTER_IMAGE=flutter-ci:1.0`; saving a job does not provision those resources.
+The original build/signing values in the example are starting choices, not Jenkinsfile defaults. For the packaged topology they include `LINUX_AGENT_LABEL=built-in`, `MACOS_AGENT_LABEL=flutter-macos` and `FLUTTER_IMAGE=flutter-ci:1.0`; saving a job does not provision those resources.
 
 <a id="source"></a>
 ## App source and build selection
@@ -175,6 +175,7 @@ The non-upload values in the example are starting choices, not Jenkinsfile defau
 | APP_CREDENTIALS_ID | String | Credential ID such as app-git; empty for access needing no Jenkins credential | Git credentials for the app, separate from central-repository credentials. HTTPS normally uses Username with password/token; SSH uses SSH Username with private key. |
 | ENVIRONMENT | Choice | testing, staging, production | Output grouping and Dart define. Does not load an environment file or automatically select a flavor. |
 | BUILD_MODE | Choice | debug, release | Flutter build mode. No profile mode is exposed. |
+| ANDROID_ARTIFACT_TYPE | Choice | apk, aab; omitted: apk for debug, aab for release | Android format to build, verify, archive and upload. Independent of BUILD_MODE; existing release signing applies to either format. Google Play requires release + aab. |
 | PLATFORM | Choice | android, web, ios, all | all runs Web, Android and iOS; a native Mac worker is required for ios/all. No comma-separated platform subsets. |
 
 <a id="identity"></a>
@@ -258,7 +259,7 @@ Uploads run after the platform artifact is successfully built, verified and arch
 | APPSTORE_API_KEY_CREDENTIALS_ID | String | Empty or appstore-upload | Jenkins Secret file ID holding Fastlane App Store Connect API-key JSON. Required for selected appstore destination. |
 | UPLOAD_RELEASE_NOTES | String | Empty by default; up to 500 characters | Optional trimmed single-line release notes; no secrets. |
 
-Android Firebase uses the current output: debug APK or release AAB. Firebase AAB distribution requires Google Play linkage and its prerequisites. Google Play requires BUILD_MODE=release and a correctly signed AAB. iOS uploads require BUILD_MODE=release and a signed IPA: Firebase accepts IOS_EXPORT_METHOD=release-testing, debugging or enterprise; appstore requires app-store-connect. Simulator archives cannot be uploaded. The appstore destination uploads the binary to App Store Connect for TestFlight; it does not submit an App Review request or automatically release the app publicly.
+Android builds, archives and uploads the format selected by ANDROID_ARTIFACT_TYPE. For Firebase without Google Play linkage, select apk; use BUILD_MODE=release for a signed release APK. Firebase AAB distribution requires Google Play linkage and its prerequisites. Google Play requires BUILD_MODE=release, ANDROID_ARTIFACT_TYPE=aab and correct signing. iOS uploads require BUILD_MODE=release and a signed IPA: Firebase accepts IOS_EXPORT_METHOD=release-testing, debugging or enterprise; appstore requires app-store-connect. Simulator archives cannot be uploaded. The appstore destination uploads the binary to App Store Connect for TestFlight; it does not submit an App Review request or automatically release the app publicly.
 
 Signing credentials and upload credentials serve separate purposes. Upload credentials are bound only in the upload stage, after artifact archival. An upload failure fails the build while preserving its archived artifact. Selecting an upload destination enables uploads on automatic SCM builds too.
 
@@ -275,7 +276,7 @@ Register the Android package name/iOS bundle ID in the intended Firebase project
 
 Provide a service-account JSON with Firebase App Distribution permissions as a Jenkins Secret file and set FIREBASE_CREDENTIALS_ID to its credential ID. The central runner passes that bound file to the Fastlane action as `service_credentials_file`. Configure access according to [Firebase service-account authentication](https://firebase.google.com/docs/app-distribution/authenticate-service-account).
 
-Android debug uploads its signed APK; Android release uploads its signed AAB. For AABs, complete [Firebase's Google Play linkage and AAB prerequisites](https://firebase.google.com/docs/app-distribution/android/distribute-fastlane?apptype=aab) first. An APK does not need that linkage.
+Set ANDROID_ARTIFACT_TYPE=apk to distribute an APK, or aab to distribute an Android App Bundle. BUILD_MODE still selects debug or release and the existing signing configuration still applies. For AABs, complete [Firebase's Google Play linkage and AAB prerequisites](https://firebase.google.com/docs/app-distribution/android/distribute-fastlane?apptype=aab) first. An APK does not need that linkage.
 
 For iOS, set BUILD_MODE=release and IOS_EXPORT_METHOD to release-testing, debugging or enterprise, with matching signing material. Simulator ZIPs and app-store-connect exports are rejected for this destination. Device registration/provisioning must permit installation by the intended testers. The Mac agent must have Ruby/Bundler in its service PATH; the pipeline installs the locked upload bundle before binding credentials. Firebase CLI is not required. See [Mac setup](SETUP_MACOS.md).
 
@@ -352,8 +353,8 @@ These examples show selection only; fill the other required fields and appropria
 
 | Upload example | Saved settings in addition to required build/signing values |
 | --- | --- |
-| Android QA APK | `PLATFORM=android`, `BUILD_MODE=debug`, `ANDROID_UPLOAD_DESTINATION=firebase`; Firebase Android app ID, credential ID and optional groups |
-| Android Play draft | `PLATFORM=android`, `BUILD_MODE=release`, `ANDROID_UPLOAD_DESTINATION=google`, `GOOGLE_PLAY_TRACK=internal`, `GOOGLE_PLAY_RELEASE_STATUS=draft`; Play credential ID |
+| Android QA APK | `PLATFORM=android`, `BUILD_MODE=release`, `ANDROID_ARTIFACT_TYPE=apk`, `ANDROID_UPLOAD_DESTINATION=firebase`; Firebase Android app ID, credential ID and optional groups |
+| Android Play draft | `PLATFORM=android`, `BUILD_MODE=release`, `ANDROID_ARTIFACT_TYPE=aab`, `ANDROID_UPLOAD_DESTINATION=google`, `GOOGLE_PLAY_TRACK=internal`, `GOOGLE_PLAY_RELEASE_STATUS=draft`; Play credential ID |
 | iOS Firebase testers | `PLATFORM=ios`, `BUILD_MODE=release`, `IOS_EXPORT_METHOD=release-testing`, `IOS_UPLOAD_DESTINATION=firebase`; Firebase iOS app ID, credential ID and optional groups |
 | iOS TestFlight | `PLATFORM=ios`, `BUILD_MODE=release`, `IOS_EXPORT_METHOD=app-store-connect`, `IOS_UPLOAD_DESTINATION=appstore`; API-key credential ID |
 | Web archive | `PLATFORM=web`, `WEB_UPLOAD_DESTINATION=none` |
@@ -364,8 +365,8 @@ Outputs are under `app/build/ci/<ENVIRONMENT>/<BUILD_MODE>/<platform>/` in the J
 
 | Platform | Mode | Artifact | Signing |
 | --- | --- | --- | --- |
-| Android | debug | `app.apk` | Normal debug signing |
-| Android | release | `app.aab` | Configured Android signing |
+| Android | debug | `app.apk` or `app.aab`, selected by ANDROID_ARTIFACT_TYPE; default APK | Normal debug signing |
+| Android | release | `app.apk` or `app.aab`, selected by ANDROID_ARTIFACT_TYPE; default AAB | Configured Android signing |
 | Web | debug or release | `app.zip` | None |
 | iOS | debug | `app.zip` | Unsigned simulator archive |
 | iOS | release | `app.ipa` | Apple device-release signing |
